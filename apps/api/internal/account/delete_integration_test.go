@@ -77,7 +77,7 @@ func seedUser(t *testing.T, db *mongo.Database, tgID int64) primitive.ObjectID {
 func newHandler(db *mongo.Database) *Handler {
 	// No bot token: every send fails as ErrUnreachable, which is exactly the
 	// "user hasn't pressed /start" branch we want to assert.
-	return NewHandler(config.Config{TelegramBotUsername: "Ishchi_bormi_auth_bot"}, db, nil)
+	return NewHandler(config.Config{TelegramBotUsername: "Ishchibormibot"}, db, nil)
 }
 
 // With no reachable Telegram chat the request must still succeed, reporting
@@ -100,7 +100,7 @@ func TestRequestDeleteFallsBackToBotLink(t *testing.T) {
 	if got.Sent {
 		t.Fatal("sent = true, want false when the chat is unreachable")
 	}
-	if got.BotURL != "https://t.me/Ishchi_bormi_auth_bot" {
+	if got.BotURL != "https://t.me/Ishchibormibot" {
 		t.Fatalf("botUrl = %q, want the bot deep link", got.BotURL)
 	}
 	if got.CodeLength != CodeLength {

@@ -12,7 +12,7 @@ import { LangMenu } from "@/components/LangMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TelegramIcon } from "@/components/icons/TelegramIcon";
 
-type Req = { tgToken: string; botUrl: string; devCode?: string };
+type Req = { tgToken: string; devCode?: string };
 type Verify = { accessToken: string; refreshToken: string; user: User };
 
 /** Figma "01 · Ro'yxatdan o'tish (Kod kiritish)": chapda ko'k panel, o'ngda kod kartasi. */
@@ -20,7 +20,6 @@ export default function LoginPage() {
   const router = useRouter();
   const t = useT();
   const [tgToken, setTgToken] = useState("");
-  const [botUrl, setBotUrl] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -30,7 +29,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     api.post<Req>("/api/auth/otp/request", {}).then((r) => {
-      setTgToken(r.tgToken); setBotUrl(r.botUrl);
+      setTgToken(r.tgToken);
     }).catch(() => {
       setError("Serverga ulanib bo'lmadi. Birozdan so'ng qayta urinib ko'ring.");
     });
@@ -39,17 +38,15 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Backend botUrl'ni bermasa (username sozlanmagan bo'lsa), token va ochiq
-  // bot username'idan zaxira havola quramiz. Bot nomi lib/contact.ts dagi
-  // yagona manbadan olinadi (NEXT_PUBLIC_BOT_USERNAME orqali sozlanadi).
-  const botUsername = AUTH_BOT_USERNAME;
+  // Login va saytdagi boshqa bot havolalari bitta sozlamadan olinadi.
+  // Backend eski botUrl qaytarsa ham OTP sessiyasi yangi botga uzatiladi.
   const effectiveBotUrl =
-    botUrl || (tgToken && botUsername ? `https://t.me/${botUsername}?start=${tgToken}` : "");
+    tgToken ? `https://t.me/${AUTH_BOT_USERNAME}?start=${encodeURIComponent(tgToken)}` : "";
   // t.me ba'zi tarmoqlarda brauzerda ochilmaydi (DNS bloklanishi mumkin), lekin
   // Telegram ilovasi ishlaydi. tg:// havolasi DNS'siz to'g'ridan-to'g'ri
   // o'rnatilgan Telegram ilovasini ochadi — "This site can't be reached" holatida zaxira yo'l.
   const tgAppUrl =
-    tgToken && botUsername ? `tg://resolve?domain=${botUsername}&start=${tgToken}` : "";
+    tgToken ? `tg://resolve?domain=${AUTH_BOT_USERNAME}&start=${encodeURIComponent(tgToken)}` : "";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

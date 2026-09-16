@@ -141,7 +141,7 @@ services:
       args:
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-https://ishchibormi.uz}
         NEXT_PUBLIC_WS_BASE: ${NEXT_PUBLIC_WS_BASE:-wss://ishchibormi.uz}
-        NEXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-Ishchi_bormi_auth_bot}
+        NEXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-Ishchibormibot}
         # Maxfiy: .env dan keladi, standart qiymati ATAYLAB yo'q. Bo'sh
         # bo'lsa panel eski joyida (/admin) ochilaveradi.
         ADMIN_PANEL_HOST: ${ADMIN_PANEL_HOST:-}
@@ -156,7 +156,7 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-https://ishchibormi.uz}
       NEXT_PUBLIC_WS_BASE: ${NEXT_PUBLIC_WS_BASE:-wss://ishchibormi.uz}
-      NEXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-Ishchi_bormi_auth_bot}
+      NEXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-Ishchibormibot}
       ADMIN_PANEL_HOST: ${ADMIN_PANEL_HOST:-}
 
 volumes:

@@ -142,7 +142,7 @@ jobs:
               exit 1
             fi
             set_env TELEGRAM_BOT_TOKEN "$BOT_TOKEN"
-            set_env TELEGRAM_BOT_USERNAME Ishchi_bormi_auth_bot
+            set_env TELEGRAM_BOT_USERNAME Ishchibormibot
 
             # Access token muddati (daqiqada). 4320 = 72 soat. Serverdagi .env
             # gitignore qilingani uchun bu qiymat har deploy'da majburan yoziladi.

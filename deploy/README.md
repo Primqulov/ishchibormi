@@ -104,6 +104,17 @@ Kerakli GitHub secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`,
 `BOT_SHARED_SECRET`, `ADMIN_SEED_PASS`, `ADMIN_PANEL_HOST`
 (S3, `MONGO_URI` va `GEMINI_API_KEY` — ixtiyoriy).
 
+OTP boti — `@Ishchibormibot`. `TELEGRAM_BOT_TOKEN` secretida shu botning
+tokeni bo'lishi kerak; deploy `TELEGRAM_BOT_USERNAME=Ishchibormibot` ni
+serverdagi `.env` ga yozadi. Frontend bot nomini build vaqtida oladi,
+shuning uchun bot o'zgarganda backend, bot va frontend birga qayta deploy
+qilinadi. Lokal ishga tushirishda ildizdagi `.env` hamda
+`apps/web/.env.local` dagi `NEXT_PUBLIC_BOT_USERNAME` yangilanadi.
+
+Eski bot bilan suhbat yangi botga ko'chmaydi: foydalanuvchi yangi botda
+`Start` bosishi kerak. `ERROR_ALERT_CHAT_ID` ishlatilsa, yangi botga o'sha
+guruh yoki kanalga xabar yuborish huquqini ham bering.
+
 ## Nega asosiy `docker-compose.yml` ildizda qoldi
 
 Uni ham shu papkaga ko'chirish tabiiy ko'rinadi, lekin bu **prod ma'lumotini

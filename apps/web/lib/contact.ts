@@ -15,7 +15,7 @@ export type SocialLink = { label: string; href: string };
 // Zaxira qiymat — HAQIQIY produksiya boti; NEXT_PUBLIC_BOT_USERNAME orqali
 // (masalan test botga) qayta yo'naltirish mumkin.
 export const AUTH_BOT_USERNAME =
-  process.env.NEXT_PUBLIC_BOT_USERNAME || "Ishchi_bormi_auth_bot";
+  process.env.NEXT_PUBLIC_BOT_USERNAME || "Ishchibormibot";
 
 export const AUTH_BOT: SocialLink = {
   label: `@${AUTH_BOT_USERNAME}`,
