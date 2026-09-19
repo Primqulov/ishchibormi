@@ -29,7 +29,7 @@ type Sender interface {
 	Configured() bool
 	BotUsername(context.Context) (string, error)
 	ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error)
-	SendChannelHTML(context.Context, int64, string, []tgsend.Button) (int64, error)
+	SendChannelPost(context.Context, int64, tgsend.ChannelPost) (int64, error)
 }
 
 // Bitta tsiklda yuboriladigan post soni. Telegram umumiy chegarasi sekundiga
@@ -300,8 +300,7 @@ func (p *Publisher) deliverNext(parent context.Context) (bool, error) {
 	if p.channels.FindOne(ctx, bson.M{"_id": claimed.ChatID, "status": "active"}).Err() != nil {
 		return true, p.finish(ctx, claimed, "skipped", "channel_inactive", 0)
 	}
-	text, buttons := Message(live, p.botUsername)
-	id, err := p.sender.SendChannelHTML(ctx, claimed.ChatID, text, buttons)
+	id, err := p.sender.SendChannelPost(ctx, claimed.ChatID, Message(live, p.botUsername))
 	if err == nil && id > 0 {
 		p.channelDelivered(ctx, claimed.ChatID)
 		return true, p.finish(ctx, claimed, "sent", "", id)
@@ -360,16 +359,76 @@ func (p *Publisher) channelDelivered(ctx context.Context, chatID int64) {
 	_, _ = p.channels.UpdateOne(ctx, bson.M{"_id": chatID, "failures": bson.M{"$gt": 0}}, bson.M{"$set": bson.M{"failures": 0}})
 }
 
-func Message(e models.Elon, username string) (string, []tgsend.Button) {
-	title := []rune(strings.Join(strings.Fields(e.Title), " "))
-	if len(title) > 160 {
-		title = title[:160]
+// Message kanalga yuboriladigan postni tayyorlaydi.
+//
+// Koordinatasi bor e'lon VENUE bo'ladi — Telegramning o'z xarita kartasi.
+// Ilgari bu yerda Google Maps havolasi tugmasi turardi va u brauzerni ochib
+// yuborardi; venue esa Telegram ichida ochiladi va foydalanuvchi o'zi
+// xohlasa tashqi xaritaga o'tadi.
+//
+// Aloqa telefoni, to'liq tavsif va manzil matni kanalga CHIQMAYDI: ularni
+// ko'rish uchun odam botga o'tadi.
+func Message(e models.Elon, username string) tgsend.ChannelPost {
+	buttons := []tgsend.Button{{Text: "Ish haqida batafsil", URL: "https://t.me/" + username + "?start=job_" + e.ID.Hex()}}
+	if tgsend.ValidCoordinates(e.Lat, e.Lng) {
+		return tgsend.ChannelPost{
+			Venue: true, Lat: e.Lat, Lng: e.Lng,
+			Title: venueTitle(e), Address: venueAddress(e), Buttons: buttons,
+		}
 	}
-	pay := "Kelishiladi"
+	return tgsend.ChannelPost{Text: summaryHTML(e), Buttons: buttons}
+}
+
+// Venue sarlavhasi — ish nomi va eng muhim ikki fakt. Telegram uni bitta
+// qatorda, qalin qilib ko'rsatadi, ya'ni uzun matn qirqilib ketadi.
+func venueTitle(e models.Elon) string {
+	head := shorten(plain(e.Title), 90)
+	facts := []string{}
+	if e.WorkersNeeded > 0 {
+		facts = append(facts, fmt.Sprintf("%d kishi", e.WorkersNeeded))
+	}
+	facts = append(facts, payText(e))
+	return shorten(head+" — "+strings.Join(facts, ", "), 250)
+}
+
+// Venue manzili — karta ostidagi kichik qator: hudud va vaqt.
+func venueAddress(e models.Elon) string {
+	parts := []string{}
+	if address := placeText(e); address != "" {
+		parts = append(parts, address)
+	}
+	if when := whenText(e); when != "" {
+		parts = append(parts, when)
+	}
+	if len(parts) == 0 {
+		// Telegram bo'sh manzilni rad etadi, xaritaning o'zi esa baribir
+		// aniq joyni ko'rsatadi.
+		return "Manzil xaritada"
+	}
+	return shorten(strings.Join(parts, " · "), 250)
+}
+
+// summaryHTML — koordinatasiz e'lon uchun eski matn posti.
+func summaryHTML(e models.Elon) string {
+	text := fmt.Sprintf("💼 <b>%s</b>\n\n👥 Kerak: <b>%d kishi</b>\n💰 Ish haqi: <b>%s</b>",
+		tgsend.EscapeHTML(shorten(plain(e.Title), 160)), e.WorkersNeeded, tgsend.EscapeHTML(payText(e)))
+	if when := whenText(e); when != "" {
+		text += "\n📅 " + tgsend.EscapeHTML(when)
+	}
+	if address := placeText(e); address != "" {
+		text += "\n📍 " + tgsend.EscapeHTML(shorten(address, 180))
+	}
+	return text + "\n\nIsh haqida batafsil ma'lumot olish uchun pastdagi tugmani bosing."
+}
+
+func payText(e models.Elon) string {
 	if e.PricingType != "negotiable" && e.PerWorkerAmount > 0 {
-		pay = money(e.PerWorkerAmount) + " so'm / kishi"
+		return money(e.PerWorkerAmount) + " so'm / kishi"
 	}
-	text := fmt.Sprintf("💼 <b>%s</b>\n\n👥 Kerak: <b>%d kishi</b>\n💰 Ish haqi: <b>%s</b>", tgsend.EscapeHTML(string(title)), e.WorkersNeeded, pay)
+	return "Kelishiladi"
+}
+
+func whenText(e models.Elon) string {
 	date, clock := e.StartDate, e.WorkTimeFrom
 	if len(date) >= 16 && clock == "" {
 		clock = date[11:16]
@@ -377,46 +436,33 @@ func Message(e models.Elon, username string) (string, []tgsend.Button) {
 	if len(date) >= 10 {
 		date = date[:10]
 	}
-	if parsed, err := time.Parse("2006-01-02", date); err == nil {
-		text += "\n📅 " + parsed.Format("02.01.2006")
-		if clock != "" {
-			text += " · " + tgsend.EscapeHTML(clock) + " (Toshkent)"
-		}
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return ""
 	}
-	address := strings.Trim(strings.TrimSpace(e.Region)+", "+strings.TrimSpace(e.District), ", ")
-	r := []rune(address)
-	if len(r) > 180 {
-		r = r[:180]
+	out := parsed.Format("02.01.2006")
+	if clock != "" {
+		out += " · " + plain(clock) + " (Toshkent)"
 	}
-	if len(r) > 0 {
-		text += "\n📍 " + tgsend.EscapeHTML(string(r))
-	}
-	text += "\n\nIsh haqida batafsil ma'lumot olish uchun pastdagi tugmani bosing."
-	buttons := []tgsend.Button{{Text: "Ish haqida batafsil", URL: "https://t.me/" + username + "?start=job_" + e.ID.Hex()}}
-	// Xarita — ochiq ma'lumot: ish qayerdaligini bilmasdan unga borib
-	// bo'lmaydi va u botda ham, saytda ham allaqachon ko'rsatiladi. Aloqa
-	// telefoni, to'liq tavsif va ish beruvchi haqidagi ma'lumot esa
-	// kanalga ATAYLAB chiqmaydi: ularni ko'rish uchun odam botga o'tadi.
-	if mapURL := mapLink(e); mapURL != "" {
-		buttons = append(buttons, tgsend.Button{Text: "🗺 Xaritada ochish", URL: mapURL})
-	}
-	return text, buttons
+	return out
 }
 
-// mapLink e'lon koordinatalarining xarita havolasi. Koordinata yo'q bo'lsa
-// (eski e'lon yoki xaritasiz forma) bo'sh satr — tugma qo'shilmaydi.
-//
-// Manzil botdagi "Xaritada ochish" bilan bir xil shaklda quriladi, ya'ni
-// foydalanuvchi qayerdan bosishidan qat'i nazar ayni joyni ko'radi.
-func mapLink(e models.Elon) string {
-	if e.Lat == 0 && e.Lng == 0 {
-		return ""
-	}
-	if e.Lat < -90 || e.Lat > 90 || e.Lng < -180 || e.Lng > 180 {
-		return ""
-	}
-	return fmt.Sprintf("https://www.google.com/maps?q=%.6f,%.6f", e.Lat, e.Lng)
+func placeText(e models.Elon) string {
+	return strings.Trim(plain(e.Region)+", "+plain(e.District), ", ")
 }
+
+// plain qator ichidagi ortiqcha bo'shliq va yangi qatorlarni olib tashlaydi:
+// venue sarlavhasi bitta qator, ko'p qatorli matn u yerda buzilib ko'rinardi.
+func plain(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+func shorten(s string, limit int) string {
+	r := []rune(s)
+	if len(r) <= limit {
+		return s
+	}
+	return string(r[:limit])
+}
+
 func money(value int64) string {
 	raw := fmt.Sprint(value)
 	for i := len(raw) - 3; i > 0; i -= 3 {

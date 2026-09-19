@@ -30,6 +30,7 @@ type fakeSender struct {
 	username            string
 	text                string
 	buttons             []tgsend.Button
+	post                tgsend.ChannelPost
 }
 
 func (f *fakeSender) Configured() bool { return !f.off }
@@ -39,7 +40,7 @@ func (f *fakeSender) BotUsername(context.Context) (string, error) {
 func (f *fakeSender) ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error) {
 	return tgsend.ChannelInfo{ID: testChat, BotUsername: f.username}, f.resolveErr
 }
-func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b []tgsend.Button) (int64, error) {
+func (f *fakeSender) SendChannelPost(_ context.Context, id int64, post tgsend.ChannelPost) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if id >= 0 {
@@ -50,7 +51,8 @@ func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b
 	}
 	f.calls[id]++
 	f.total++
-	f.text, f.buttons = text, b
+	f.post = post
+	f.text, f.buttons = post.Text, post.Buttons
 	return 123, f.sendErr
 }
 func (f *fakeSender) sent(chat int64) int {
@@ -365,11 +367,16 @@ func TestChannelDisabledWithoutTokenAndRejectsWrongBotName(t *testing.T) {
 
 func TestChannelMessageEscapesTextAndKeepsPayMeaning(t *testing.T) {
 	e := models.Elon{ID: primitive.NewObjectID(), Title: `<a href="https://bad.test">Ish</a> & ish`, WorkersNeeded: 3, PricingType: "negotiable", PerWorkerAmount: 99999, Region: "<b>Viloyat</b>"}
-	text, buttons := Message(e, "testbot")
-	if strings.Contains(text, "<a ") || strings.Contains(text, "<b>Viloyat") || strings.Contains(text, "99999") || !strings.Contains(text, "Kelishiladi") {
+	// Koordinatasiz e'lon matn posti bo'lib qoladi, ya'ni HTML ekranlanishi
+	// shu yerda tekshiriladi.
+	post := Message(e, "testbot")
+	if post.Venue {
+		t.Fatal("a listing without coordinates became a venue")
+	}
+	if strings.Contains(post.Text, "<a ") || strings.Contains(post.Text, "<b>Viloyat") || strings.Contains(post.Text, "99999") || !strings.Contains(post.Text, "Kelishiladi") {
 		t.Fatal("unsafe or misleading summary")
 	}
-	for _, b := range buttons {
+	for _, b := range post.Buttons {
 		if !b.Valid() {
 			t.Fatalf("invalid button: %+v", b)
 		}
@@ -390,42 +397,45 @@ func TestChannelPostCarriesTheMapButMotContactDetails(t *testing.T) {
 	withMap := base
 	withMap.Lat, withMap.Lng = 41.3111, 69.2797
 
-	text, buttons := Message(withMap, "testbot")
-	if strings.Contains(text, base.ContactPhone) || strings.Contains(text, base.Description) || strings.Contains(text, base.LocationText) {
-		t.Fatalf("channel post leaked private details: %q", text)
+	// Koordinatasi bor e'lon VENUE bo'ladi: Telegram uni o'z xarita
+	// kartasida ko'rsatadi va tashqi brauzerga chiqib ketmaydi.
+	post := Message(withMap, "testbot")
+	if !post.Venue || post.Lat != withMap.Lat || post.Lng != withMap.Lng {
+		t.Fatalf("listing with coordinates did not become a venue: %+v", post)
 	}
-	var mapURL string
-	for _, b := range buttons {
-		if strings.Contains(b.URL, "maps") {
-			mapURL = b.URL
-		}
-		if !b.Valid() {
-			t.Fatalf("invalid button: %+v", b)
-		}
+	card := post.Title + " | " + post.Address
+	if strings.Contains(card, base.ContactPhone) || strings.Contains(card, base.Description) || strings.Contains(card, base.LocationText) {
+		t.Fatalf("channel post leaked private details: %q", card)
 	}
-	if mapURL != "https://www.google.com/maps?q=41.311100,69.279700" {
-		t.Fatalf("map link: %q", mapURL)
+	if !strings.Contains(post.Title, "Yuk tushirish") || !strings.Contains(post.Title, "3 kishi") || !strings.Contains(post.Title, "150 000") {
+		t.Fatalf("venue title lost the key facts: %q", post.Title)
+	}
+	if !strings.Contains(post.Address, "Chilonzor") {
+		t.Fatalf("venue address: %q", post.Address)
+	}
+	// Venue sarlavhasi PLAIN matn — HTML ekranlash u yerda `&amp;` bo'lib
+	// ko'rinardi.
+	if strings.Contains(card, "&amp;") || strings.Contains(card, "<b>") {
+		t.Fatalf("venue card contains HTML: %q", card)
+	}
+	if len(post.Buttons) != 1 || !strings.Contains(post.Buttons[0].URL, "start=job_") {
+		t.Fatalf("want only the job button, got %+v", post.Buttons)
 	}
 
-	// Koordinatasiz e'lon (eski yozuv): tugma umuman qo'shilmaydi, ishlamaydigan
-	// havola chiqarishdan ko'ra yo'qligi ma'qul.
-	_, plain := Message(base, "testbot")
-	for _, b := range plain {
-		if strings.Contains(b.URL, "maps") {
-			t.Fatalf("map button without coordinates: %+v", b)
-		}
-	}
-	if len(plain) != 1 {
-		t.Fatalf("want only the job button, got %+v", plain)
+	// Koordinatasiz e'lon (eski yozuv) avvalgidek matn posti bo'ladi.
+	plain := Message(base, "testbot")
+	if plain.Venue || plain.Text == "" {
+		t.Fatalf("listing without coordinates: %+v", plain)
 	}
 }
 
-// Buzuq koordinata ishlamaydigan havola bo'lib chiqmasligi kerak.
-func TestChannelMapLinkRejectsImpossibleCoordinates(t *testing.T) {
+// Buzuq koordinata venue bo'lib ketmasligi kerak: Telegram uni rad etadi
+// va butun post yuborilmay qolardi.
+func TestChannelRejectsImpossibleCoordinates(t *testing.T) {
 	for _, tc := range []struct{ lat, lng float64 }{{0, 0}, {91, 69}, {41, 181}, {-91, -181}} {
-		e := models.Elon{ID: primitive.NewObjectID(), Lat: tc.lat, Lng: tc.lng}
-		if got := mapLink(e); got != "" {
-			t.Fatalf("lat=%v lng=%v -> %q", tc.lat, tc.lng, got)
+		e := models.Elon{ID: primitive.NewObjectID(), Title: "Ish", WorkersNeeded: 2, Lat: tc.lat, Lng: tc.lng}
+		if post := Message(e, "testbot"); post.Venue {
+			t.Fatalf("lat=%v lng=%v became a venue", tc.lat, tc.lng)
 		}
 	}
 }

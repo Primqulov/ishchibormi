@@ -10,11 +10,18 @@ Kanal posti botdagi suhbatdan forward qilinmaydi. Alohida `sendMessage`
 orqali kanal posti yaratiladi; ovozli bildirishnoma va havola preview si
 o'chirilgan.
 
-Postda ikkita tugma bo'ladi: **Ish haqida batafsil** (botda ochadi) va
-**🗺 Xaritada ochish** (ish koordinatasi). Xarita ATAYLAB chiqariladi — ish
-qayerdaligini bilmasdan unga borib bo'lmaydi va u botda ham, saytda ham
-allaqachon ko'rsatiladi. Koordinatasi yo'q e'londa (eski yozuv) tugma
-qo'shilmaydi: ishlamaydigan havoladan ko'ra yo'qligi ma'qul.
+Koordinatasi bor e'lon **venue** xabari bo'lib ketadi: Telegram uni o'z
+xarita kartasi qilib ko'rsatadi va ustiga bosilganda O'ZINING xaritasini
+ochadi — brauzer yoki Google Maps'ga chiqib ketmaydi, foydalanuvchi xohlasa
+o'zi tashqi xaritaga o'tadi. Oddiy havola tugmasi buni qila olmaydi, shuning
+uchun bu yerda venue ishlatiladi.
+
+Kartaning sarlavhasi — ish nomi, kishi soni va ish haqi; ostidagi qator —
+hudud va vaqt. Ikkalasi ham PLAIN matn (HTML emas), shuning uchun ekranlash
+qilinmaydi — aks holda kartada `&amp;` ko'rinardi.
+
+Koordinatasi yo'q yoki buzuq e'lon (eski yozuv) avvalgidek HTML matn posti
+bo'ladi.
 
 Aloqa telefoni, to'liq tavsif, aniq manzil matni va ish beruvchi haqidagi
 ma'lumot kanalga CHIQMAYDI — ularni ko'rish uchun odam botga o'tadi.
@@ -38,24 +45,16 @@ qilinmaydi: e'lonlar oqimi suhbatni bosib ketardi.
 
 ## Kanal posti namunasi
 
-> 💼 **Yuk tushirish uchun ishchilar kerak**
->
-> 👥 Kerak: **4 kishi**
->
-> 💰 Ish haqi: **250 000 so'm / kishi**
->
-> 📅 18.09.2026 · 09:00 (Toshkent)
->
-> 📍 Toshkent, Chilonzor
->
-> Ish haqida batafsil ma'lumot olish uchun pastdagi tugmani bosing.
+> ┌──────────────────────────┐
+> │   XARITA (Telegram)   📍 │
+> └──────────────────────────┘
+> **Yuk tushirish uchun ishchilar kerak — 4 kishi, 250 000 so'm / kishi**
+> Toshkent, Chilonzor · 18.09.2026 · 09:00 (Toshkent)
 >
 > **Ish haqida batafsil**
-> **🗺 Xaritada ochish**
 
-Birinchi tugma `https://t.me/<bot_username>?start=job_<elon_id>` manzilini
-ochadi, ikkinchisi esa ish koordinatasini xaritada ko'rsatadi (botdagi
-"Xaritada ochish" bilan ayni shaklda).
+Tugma `https://t.me/<bot_username>?start=job_<elon_id>` manzilini ochadi.
+Kartaning o'ziga bosilsa Telegramning xaritasi ochiladi.
 Telegram botni birinchi marta ochayotgan foydalanuvchidan **Start / Boshlash**ni
 bosishni talab qilishi mumkin. Shundan keyin bot shu e'lonni darhol ochadi;
 qidiruv yoki kirish kodi talab qilinmaydi.

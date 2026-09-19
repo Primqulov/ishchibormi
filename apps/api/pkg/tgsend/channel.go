@@ -92,31 +92,79 @@ func (c *Client) ResolveChannel(ctx context.Context, ref string) (ChannelInfo, e
 
 // A new channel post, not a forwarded private message. Silent delivery avoids
 // a notification sound for every listing; it does not suppress the channel post.
+// ChannelPost — kanalga yuboriladigan post.
+//
+// Koordinatasi bor e'lon VENUE bo'lib ketadi: Telegram uni xarita kartasi
+// qilib ko'rsatadi va ustiga bosilganda O'ZINING xaritasini ochadi, keyin
+// foydalanuvchi xohlasa Google/Apple Maps'ga o'tadi. Oddiy havola tugmasi
+// buni qila olmaydi — u har doim brauzerga chiqib ketardi.
+//
+// Koordinatasi yo'q e'lon (eski yozuv) avvalgidek HTML matn bo'ladi.
+type ChannelPost struct {
+	Text           string // venue bo'lmaganda: HTML matn
+	Title, Address string // venue bo'lganda: karta sarlavhasi va ostidagi qator
+	Lat, Lng       float64
+	Venue          bool
+	Buttons        []Button
+}
+
+func ValidCoordinates(lat, lng float64) bool {
+	if lat == 0 && lng == 0 {
+		return false
+	}
+	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
+
 // Har bir tugma ALOHIDA qatorda: kanal posti telefonda o'qiladi va yonma-yon
 // turgan uzun yorliqlar qirqilib ketardi.
-func (c *Client) SendChannelHTML(ctx context.Context, channelID int64, text string, buttons []Button) (int64, error) {
-	if channelID >= 0 || len(buttons) == 0 {
+//
+// Venue sarlavhasi va manzili PLAIN matn: HTML bilan bezatilmaydi va
+// shuning uchun ekranlash ham qilinmaydi (aks holda kartada `&amp;`
+// ko'rinardi).
+func (c *Client) SendChannelPost(ctx context.Context, channelID int64, post ChannelPost) (int64, error) {
+	if channelID >= 0 || len(post.Buttons) == 0 {
 		return 0, &APIError{Code: 400, Reason: "invalid_channel_post"}
 	}
-	rows := make([][]inlineButton, 0, len(buttons))
-	for _, b := range buttons {
+	rows := make([][]inlineButton, 0, len(post.Buttons))
+	for _, b := range post.Buttons {
 		if !b.Valid() {
 			return 0, &APIError{Code: 400, Reason: "invalid_channel_post"}
 		}
 		rows = append(rows, []inlineButton{{Text: b.Text, URL: b.URL}})
 	}
-	payload := struct {
-		ChatID    int64          `json:"chat_id"`
-		Text      string         `json:"text"`
-		ParseMode string         `json:"parse_mode"`
-		Silent    bool           `json:"disable_notification"`
-		NoPreview bool           `json:"disable_web_page_preview"`
-		Markup    inlineKeyboard `json:"reply_markup"`
-	}{channelID, text, "HTML", true, true, inlineKeyboard{InlineKeyboard: rows}}
+	markup := inlineKeyboard{InlineKeyboard: rows}
 	var result struct {
 		MessageID int64 `json:"message_id"`
 	}
-	err := c.channelCall(ctx, "sendMessage", payload, &result)
+	var err error
+	if post.Venue {
+		if !ValidCoordinates(post.Lat, post.Lng) || strings.TrimSpace(post.Title) == "" || strings.TrimSpace(post.Address) == "" {
+			return 0, &APIError{Code: 400, Reason: "invalid_channel_post"}
+		}
+		payload := struct {
+			ChatID  int64          `json:"chat_id"`
+			Lat     float64        `json:"latitude"`
+			Lng     float64        `json:"longitude"`
+			Title   string         `json:"title"`
+			Address string         `json:"address"`
+			Silent  bool           `json:"disable_notification"`
+			Markup  inlineKeyboard `json:"reply_markup"`
+		}{channelID, post.Lat, post.Lng, post.Title, post.Address, true, markup}
+		err = c.channelCall(ctx, "sendVenue", payload, &result)
+	} else {
+		if strings.TrimSpace(post.Text) == "" {
+			return 0, &APIError{Code: 400, Reason: "invalid_channel_post"}
+		}
+		payload := struct {
+			ChatID    int64          `json:"chat_id"`
+			Text      string         `json:"text"`
+			ParseMode string         `json:"parse_mode"`
+			Silent    bool           `json:"disable_notification"`
+			NoPreview bool           `json:"disable_web_page_preview"`
+			Markup    inlineKeyboard `json:"reply_markup"`
+		}{channelID, post.Text, "HTML", true, true, markup}
+		err = c.channelCall(ctx, "sendMessage", payload, &result)
+	}
 	if err == nil && result.MessageID <= 0 {
 		err = ErrUnreachable
 	}

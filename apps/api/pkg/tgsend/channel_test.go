@@ -35,6 +35,24 @@ func TestChannelTransportResolvesRightsAndSendsOnlySilentChannelPost(t *testing.
 						post = "false"
 					}
 					body = `{"ok":true,"result":{"status":"administrator","can_post_messages":` + post + `}}`
+				// Koordinatasi bor e'lon venue bo'lib ketadi: Telegram uni o'z
+				// xarita kartasida ko'rsatadi. Koordinatasizi sendMessage.
+				case strings.HasSuffix(r.URL.Path, "/sendVenue"):
+					sent = true
+					var payload map[string]any
+					if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+						t.Fatal(err)
+					}
+					if payload["chat_id"] != float64(-1001234567890) || payload["disable_notification"] != true {
+						t.Fatal("incorrect channel venue")
+					}
+					if payload["latitude"] == nil || payload["longitude"] == nil || payload["title"] == "" || payload["address"] == "" {
+						t.Fatal("venue without a place")
+					}
+					if payload["from_chat_id"] != nil {
+						t.Fatal("private message forwarded")
+					}
+					body = `{"ok":true,"result":{"message_id":12}}`
 				case strings.HasSuffix(r.URL.Path, "/sendMessage"):
 					sent = true
 					var payload map[string]any
@@ -63,7 +81,10 @@ func TestChannelTransportResolvesRightsAndSendsOnlySilentChannelPost(t *testing.
 			if err != nil || info.BotUsername != "testbot" {
 				t.Fatal("resolve failed", err)
 			}
-			id, err := c.SendChannelHTML(context.Background(), info.ID, "<b>Ish</b>", []Button{{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"}, {Text: "Xaritada ochish", URL: "https://www.google.com/maps?q=41.311100,69.279700"}})
+			id, err := c.SendChannelPost(context.Background(), info.ID, ChannelPost{
+				Venue: true, Lat: 41.3111, Lng: 69.2797, Title: "Ish — 2 kishi", Address: "Toshkent, Chilonzor",
+				Buttons: []Button{{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"}},
+			})
 			if err != nil || id != 12 || !sent {
 				t.Fatal("send failed", err)
 			}
@@ -77,7 +98,7 @@ func TestChannelTransportNeverLeaksTokenOrAcceptsPrivateTarget(t *testing.T) {
 		calls++
 		return nil, errors.New("transport " + r.URL.String())
 	})
-	_, err := c.SendChannelHTML(context.Background(), 123, "message", []Button{{Text: "Open", URL: "https://t.me/testbot"}})
+	_, err := c.SendChannelPost(context.Background(), 123, ChannelPost{Text: "message", Buttons: []Button{{Text: "Open", URL: "https://t.me/testbot"}}})
 	if err == nil || calls != 0 {
 		t.Fatal("private target sent")
 	}
