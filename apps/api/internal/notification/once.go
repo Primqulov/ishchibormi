@@ -23,9 +23,12 @@ func (s *Service) PushOnce(ctx context.Context, n models.Notification) error {
 	if httpx.IsReviewActor(ctx) && !s.recipientIsReviewAccount(ctx, n.UserID) {
 		return nil
 	}
-	_, err := s.Col.UpdateOne(ctx, bson.M{"_id": n.ID}, bson.M{"$setOnInsert": n}, options.Update().SetUpsert(true))
+	_, err := s.Col.UpdateOne(ctx, bson.M{"_id": n.ID}, bson.M{"$setOnInsert": s.document(n)}, options.Update().SetUpsert(true))
 	if err != nil {
 		return err
+	}
+	if s.Telegram != nil {
+		s.Telegram.wake()
 	}
 	if s.Pusher != nil {
 		var state struct {

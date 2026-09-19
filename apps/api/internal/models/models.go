@@ -272,7 +272,8 @@ type Elon struct {
 	//
 	// json:"-" ataylab: foydalanuvchi tekshiruv o'tkazib yuborilganini
 	// bilmasligi kerak.
-	ModerationPending bool `bson:"moderationPending,omitempty" json:"-"`
+	ModerationPending bool                `bson:"moderationPending,omitempty" json:"-"`
+	TelegramChannel   *ChannelPublication `bson:"telegramChannel,omitempty" json:"-"`
 	// Denormalized moderation flag so public feed/sitemap queries can hide all
 	// listings immediately when an owner is blocked without an expensive join.
 	OwnerBlocked bool       `bson:"ownerBlocked,omitempty" json:"-"`
@@ -365,6 +366,9 @@ type Notification struct {
 	RelatedEntity *RelatedEntity     `bson:"relatedEntity,omitempty" json:"relatedEntity,omitempty"`
 	IsRead        bool               `bson:"isRead" json:"isRead"`
 	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
+	// Contact and exact location are used only for the accepted worker's
+	// Telegram message; they are not added to the shared inbox/FCM payload.
+	AcceptedJob *AcceptedJobDetails `bson:"acceptedJob,omitempty" json:"-"`
 
 	// SentByAdminID — bu xabarni AYNAN SHU foydalanuvchiga qo'lda yuborgan
 	// admin (internal/admin.NotifyUser).

@@ -24,8 +24,9 @@ type Service struct {
 	Col *mongo.Collection
 	// Users backs the review-sandbox check in Push. Optional: when nil, Push
 	// simply drops anything the review account would have triggered.
-	Users  *mongo.Collection
-	Pusher Pusher
+	Users    *mongo.Collection
+	Pusher   Pusher
+	Telegram *Telegram
 }
 
 func New(db *mongo.Database) *Service {
@@ -37,8 +38,17 @@ func New(db *mongo.Database) *Service {
 
 func (s *Service) AttachPusher(p Pusher) { s.Pusher = p }
 
+func (s *Service) AttachTelegram(t *Telegram) { s.Telegram = t }
+
 func (s *Service) Push(ctx context.Context, userID primitive.ObjectID, typ, title, body string, rel *models.RelatedEntity) {
-	s.push(ctx, userID, typ, title, body, rel, primitive.NilObjectID)
+	s.push(ctx, models.Notification{UserID: userID, Type: typ, Title: title, Body: body, RelatedEntity: rel})
+}
+
+func (s *Service) PushAcceptedJob(ctx context.Context, workerID, applicationID primitive.ObjectID, jobTitle string, details *models.AcceptedJobDetails) {
+	s.push(ctx, models.Notification{
+		UserID: workerID, Type: "application_accepted", Title: "Arizangiz qabul qilindi", Body: jobTitle,
+		RelatedEntity: &models.RelatedEntity{Type: "application", ID: applicationID}, AcceptedJob: details,
+	})
 }
 
 // PushFromAdmin — admin AYNAN SHU foydalanuvchiga qo'lda yozgan xabar
@@ -53,10 +63,10 @@ func (s *Service) Push(ctx context.Context, userID primitive.ObjectID, typ, titl
 // chaqiriladi va ularning hech biri adminga aloqador emas — hammasiga
 // bo'sh qiymat uzatish shovqin bo'lardi.
 func (s *Service) PushFromAdmin(ctx context.Context, userID, adminID primitive.ObjectID, title, body string) {
-	s.push(ctx, userID, "system", title, body, nil, adminID)
+	s.push(ctx, models.Notification{UserID: userID, Type: "system", Title: title, Body: body, SentByAdminID: adminID})
 }
 
-func (s *Service) push(ctx context.Context, userID primitive.ObjectID, typ, title, body string, rel *models.RelatedEntity, adminID primitive.ObjectID) {
+func (s *Service) push(ctx context.Context, n models.Notification) {
 	// Sandbox choke point for the Google Play review account.
 	//
 	// Every notification in the app funnels through here, so this single check
@@ -68,27 +78,26 @@ func (s *Service) push(ctx context.Context, userID primitive.ObjectID, typ, titl
 	//
 	// Fails closed: if the recipient cannot be resolved, the notification is
 	// dropped rather than delivered.
-	if httpx.IsReviewActor(ctx) && !s.recipientIsReviewAccount(ctx, userID) {
+	if httpx.IsReviewActor(ctx) && !s.recipientIsReviewAccount(ctx, n.UserID) {
 		return
 	}
-	n := models.Notification{
-		UserID: userID, Type: typ, Title: title, Body: body,
-		RelatedEntity: rel, IsRead: false, CreatedAt: time.Now(),
-		SentByAdminID: adminID,
-	}
-	res, err := s.Col.InsertOne(ctx, n)
+	n.CreatedAt = time.Now()
+	res, err := s.Col.InsertOne(ctx, s.document(n))
 	if err == nil {
 		if oid, ok := res.InsertedID.(primitive.ObjectID); ok {
 			n.ID = oid
+		}
+		if s.Telegram != nil {
+			s.Telegram.wake()
 		}
 	} else {
 		// Best-effort bo'lib qoladi (chaqiruvchini yiqitmaymiz), lekin jim
 		// yutilmasin: insert yiqilsa foydalanuvchi bildirishnomani umuman
 		// ko'rmaydi — buni logsiz payqash iloji yo'q edi.
-		slog.Error("notification insert failed", "type", typ, "user", userID.Hex(), "err", err)
+		slog.Error("notification insert failed", "type", n.Type, "user", n.UserID.Hex(), "err", err)
 	}
 	if s.Pusher != nil {
-		s.Pusher.PushUser(userID, "notification", n)
+		s.Pusher.PushUser(n.UserID, "notification", n)
 	}
 }
 

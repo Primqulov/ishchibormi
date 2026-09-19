@@ -31,6 +31,7 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		{"users", mongo.IndexModel{Keys: bson.D{{Key: "lastPlatform", Value: 1}, {Key: "lastSeenAt", Value: -1}}}},
 
 		{"elons", mongo.IndexModel{Keys: bson.D{{Key: "status", Value: 1}, {Key: "publishedAt", Value: -1}}}},
+		{"elons", mongo.IndexModel{Keys: bson.D{{Key: "telegramChannel.reference", Value: 1}, {Key: "telegramChannel.status", Value: 1}, {Key: "telegramChannel.nextAttemptAt", Value: 1}}, Options: options.Index().SetSparse(true)}},
 		{"elons", mongo.IndexModel{Keys: bson.D{{Key: "ownerId", Value: 1}, {Key: "status", Value: 1}}}},
 		{"elons", mongo.IndexModel{Keys: bson.D{{Key: "ownerFollowupPending", Value: 1}}, Options: options.Index().SetSparse(true)}},
 		{"elons", mongo.IndexModel{Keys: bson.D{{Key: "adminModerationJobs.nextAttemptAt", Value: 1}}, Options: options.Index().SetSparse(true)}},
@@ -40,6 +41,11 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		{"admin_elon_purge_events", mongo.IndexModel{Keys: bson.D{{Key: "nextAttemptAt", Value: 1}}}},
 		{"elons", mongo.IndexModel{Keys: bson.D{{Key: "categoryId", Value: 1}}}},
 		{"elons", mongo.IndexModel{Keys: bson.D{{Key: "title", Value: "text"}, {Key: "description", Value: "text"}}}},
+
+		// Ish signali (internal/jobalert): har yangi e'lon shu kolleksiyadan
+		// qo'pol to'rtburchak bo'yicha nomzodlarni tanlaydi. Usiz har e'lon
+		// butun kolleksiyani skanerlardi.
+		{"job_alerts", mongo.IndexModel{Keys: bson.D{{Key: "lat", Value: 1}, {Key: "lng", Value: 1}}}},
 
 		{"applications", mongo.IndexModel{Keys: bson.D{{Key: "workerId", Value: 1}, {Key: "status", Value: 1}}}},
 		{"applications", mongo.IndexModel{Keys: bson.D{{Key: "elonId", Value: 1}, {Key: "status", Value: 1}}}},
@@ -60,6 +66,8 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		{"categories", mongo.IndexModel{Keys: bson.D{{Key: "slug", Value: 1}}, Options: options.Index().SetUnique(true)}},
 
 		{"notifications", mongo.IndexModel{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}}},
+		// Telegram outbox shares the inbox document, so persistence is atomic.
+		{"notifications", mongo.IndexModel{Keys: bson.D{{Key: "telegram.nextAttemptAt", Value: 1}}, Options: options.Index().SetSparse(true)}},
 
 		// FCM qurilma tokenlari: bitta token — bitta hujjat (upsert kaliti);
 		// push yuborishda foydalanuvchining hamma qurilmasi userId bo'yicha olinadi.
