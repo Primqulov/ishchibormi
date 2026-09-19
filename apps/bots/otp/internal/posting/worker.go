@@ -87,10 +87,11 @@ func (e *Engine) offerRegistration(ctx context.Context, d *Draft) error {
 		if errorCode(err) != "contact_required" {
 			return nil
 		}
-		text := "Hisobingiz hali ochilmagan.\n\n" +
-			"Ro'yxatdan o'tsangiz ishga ariza yubora olasiz, arizangiz holatini kuzatasiz va belgilagan hududingizda yangi ish chiqqanda bot o'zi xabar beradi.\n\n" +
-			"Ish qidirish uchun esa ro'yxatdan o'tish shart emas — «📍 Ish topish» hammaga ochiq.\n\n" +
-			"Hisob uchala joyda bitta: shu yerda ochsangiz, saytga ham, Android ilovaga ham o'sha raqam bilan kirasiz."
+		text := "👋 Ishchi Bormi — kunlik ish e'lonlari platformasi." +
+			"\n\nShu botda:\n📍 Yaqiningizdagi ishlarni topasiz — joylashuv yoki viloyat bo'yicha\n📝 O'zingiz ish e'loni berasiz\n📋 Arizalaringiz javobini kuzatasiz\n🔔 Hududingizda yangi ish chiqqanda xabar olasiz" +
+			"\n\nHisobingiz hali ochilmagan. Ish qidirish uchun u shart emas — «📍 Ish topish» hammaga ochiq. Ariza yuborish uchun esa kerak: ish beruvchi ismingiz va tasdiqlangan raqamingizni ko'radi." +
+			"\n\nRo'yxatdan o'tish shu yerda ham mumkin — telefon, ism, familiya va yashash hududingiz so'raladi." +
+			"\n\nHisob uchala joyda bitta: shu yerda ochsangiz, saytga ham, Android ilovaga ham o'sha raqam bilan kirasiz."
 		return e.workerMessage(d.ChatID, text,
 			tg.NewInlineKeyboardRow(workerButton("📝 Shu yerda ro'yxatdan o'tish", "register", "new")),
 			tg.NewInlineKeyboardRow(
@@ -321,8 +322,8 @@ func (e *Engine) workerAuthenticated(ctx context.Context, d *Draft, update int, 
 	f := d.Worker
 	f.UserID, f.Profile = s.User.ID, s.User
 	if f.Purpose == "apply" || f.Purpose == "register" {
-		for _, field := range []struct{ step, text string }{{"first_name", f.Profile.FirstName}, {"region", f.Profile.Region}, {"district", f.Profile.District}} {
-			if strings.TrimSpace(field.text) == "" {
+		for _, field := range profileSteps(f.Purpose, f.Profile) {
+			if strings.TrimSpace(field.value) == "" {
 				f.Step = field.step
 				if err := e.saveWorker(ctx, d, update); err != nil {
 					return err
@@ -445,41 +446,50 @@ func (e *Engine) continueWorker(ctx context.Context, d *Draft, update int, m *tg
 			return err
 		}
 		return e.workerAuthenticated(ctx, d, update, s)
-	case "first_name", "region", "district":
-		limit := 100
-		if f.Step == "first_name" {
-			limit = 80
-		}
-		if !validText(text, limit) {
-			return e.say(d.ChatID, fmt.Sprintf("1–%d belgidan iborat ma'lumot kiriting.", limit))
-		}
-		s, err := e.workerSession(ctx, d)
-		if err != nil {
-			return e.say(d.ChatID, workerError(err))
+	case "first_name", "last_name":
+		if !validText(text, 80) {
+			return e.say(d.ChatID, "1–80 belgidan iborat ma'lumot kiriting.")
 		}
 		p := f.Profile
-		switch f.Step {
-		case "first_name":
+		if f.Step == "first_name" {
 			p.FirstName = text
-		case "region":
-			p.Region = text
-		case "district":
-			p.District = text
+		} else {
+			p.LastName = text
 		}
-		f.Profile, f.Filled = p, true
-		for _, field := range []struct{ step, text string }{{"first_name", p.FirstName}, {"region", p.Region}, {"district", p.District}} {
-			if strings.TrimSpace(field.text) == "" {
-				f.Step = field.step
-				if err := e.saveWorker(ctx, d, update); err != nil {
-					return err
-				}
-				return e.workerPrompt(d)
+		return e.advanceProfile(ctx, d, update, p)
+	case "region":
+		// Tugma ham, qo'lda yozilgan nom ham qabul qilinadi; natija baribir
+		// yopiq ro'yxatdan chiqadi.
+		name, ok := pickRegion(action, text)
+		if !ok {
+			return e.workerPrompt(d)
+		}
+		p := f.Profile
+		// Viloyat almashsa eski tuman unga tegishli bo'lmasligi mumkin.
+		p.Region, p.District = name, ""
+		f.Page = 1
+		return e.advanceProfile(ctx, d, update, p)
+	case "district":
+		if action == "region" {
+			// «Viloyatni o'zgartirish» — tuman ham bekor qilinadi.
+			p := f.Profile
+			p.Region, p.District = "", ""
+			return e.advanceProfile(ctx, d, update, p)
+		}
+		if page, ok := districtPage(action); ok {
+			f.Page = page
+			if err := e.saveWorker(ctx, d, update); err != nil {
+				return err
 			}
+			return e.workerPrompt(d)
 		}
-		if err := e.API.SaveProfile(ctx, s, p); err != nil {
-			return e.say(d.ChatID, workerError(err))
+		name, ok := pickDistrict(f.Profile.Region, action, text)
+		if !ok {
+			return e.workerPrompt(d)
 		}
-		return e.prepareWorker(ctx, d, update, s)
+		p := f.Profile
+		p.District = name
+		return e.advanceProfile(ctx, d, update, p)
 	case "people":
 		if action == "alone" {
 			text = "1"
@@ -514,6 +524,36 @@ func (e *Engine) continueWorker(ctx context.Context, d *Draft, update int, m *tg
 	}
 	return e.workerPrompt(d)
 }
+
+// advanceProfile profilni yangilaydi, keyingi yetishmayotgan maydonga
+// o'tadi, hammasi to'lganda esa saqlab oqimni davom ettiradi.
+//
+// Ilgari har bir maydon qadamida sessiya qayta olinardi — ya'ni to'rtta
+// maydon to'rtta ortiqcha so'rov demak edi. Endi u faqat saqlashdan oldin
+// bir marta olinadi; hisob o'zgarganini shu yerda ham, keyingi
+// tasdiqlashda ham tekshiruv ushlab qoladi.
+func (e *Engine) advanceProfile(ctx context.Context, d *Draft, update int, p Profile) error {
+	f := d.Worker
+	f.Profile, f.Filled = p, true
+	for _, field := range profileSteps(f.Purpose, p) {
+		if strings.TrimSpace(field.value) == "" {
+			f.Step = field.step
+			if err := e.saveWorker(ctx, d, update); err != nil {
+				return err
+			}
+			return e.workerPrompt(d)
+		}
+	}
+	s, err := e.workerSession(ctx, d)
+	if err != nil {
+		return e.say(d.ChatID, workerError(err))
+	}
+	if err := e.API.SaveProfile(ctx, s, p); err != nil {
+		return e.say(d.ChatID, workerError(err))
+	}
+	return e.prepareWorker(ctx, d, update, s)
+}
+
 func (e *Engine) workerPrompt(d *Draft) error {
 	f := d.Worker
 	rows := [][]tg.InlineKeyboardButton{}
@@ -531,10 +571,14 @@ func (e *Engine) workerPrompt(d *Draft) error {
 		return err
 	case "first_name":
 		text = "Ish beruvchi sizni tanishi uchun ismingizni kiriting."
+	case "last_name":
+		text = "Familiyangizni kiriting."
 	case "region":
-		text = "Yashash viloyatingizni kiriting. Masalan: Toshkent."
+		text = "Yashash viloyatingizni tanlang."
+		rows = append(rows, profileRegionRows(f)...)
 	case "district":
-		text = "Yashash tumaningiz yoki shahringizni kiriting."
+		text = "Viloyat: " + f.Profile.Region + "\n\nYashash tumaningizni tanlang."
+		rows = append(rows, profileDistrictRows(f)...)
 	case "people":
 		text = fmt.Sprintf("%s\n\nNecha kishi borasiz? O'zingizni ham hisoblang.\nBo'sh o'rinlar: %d. Guruh bo'lib borsangiz, kishi sonini yozing.", f.Job.Title, f.Job.WorkersNeeded-f.Job.AcceptedCount)
 		rows = append(rows, tg.NewInlineKeyboardRow(flowButton(f, "🙋 Faqat o'zim", "alone")))

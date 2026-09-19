@@ -303,13 +303,19 @@ func TestWorkerRegisterLinksAccountAndCompletesProfile(t *testing.T) {
 	own.Contact = &tg.Contact{UserID: 42, PhoneNumber: "998901234567"}
 	h.send(own)
 	h.text("Ali")
-	h.text("Toshkent")
-	h.text("Chilonzor")
+	h.text("Karimov")
+	// Viloyat va tuman YOPIQ ro'yxatdan tanlanadi: tugma bosilsa ham,
+	// nomi yozilsa ham profilga aynan ro'yxatdagi satr tushadi.
+	h.flowClick("r0") // Toshkent shahri
+	h.flowClick("d1") // Chilonzor tumani
 	if h.s.draft.Worker != nil {
 		t.Fatal("registration flow left open")
 	}
-	if h.a.profile.FirstName != "Ali" || h.a.profile.Region != "Toshkent" || h.a.profile.District != "Chilonzor" {
-		t.Fatalf("profile not saved: %+v", h.a.profile)
+	if h.a.profile.FirstName != "Ali" || h.a.profile.LastName != "Karimov" {
+		t.Fatalf("name not saved: %+v", h.a.profile)
+	}
+	if h.a.profile.Region != "Toshkent shahri" || h.a.profile.District != "Chilonzor tumani" {
+		t.Fatalf("address not taken from the closed list: %+v", h.a.profile)
 	}
 	// Yakuniy xabar oqimning o'z nusxasidan quriladi: sessiya profil
 	// qadamlaridan OLDIN olingani uchun s.User hali bo'sh bo'lardi.
@@ -434,5 +440,115 @@ func TestRegistrationOfferSkippedWhenSessionCheckFails(t *testing.T) {
 	}
 	if h.hasText("Hisobingiz hali ochilmagan") || h.s.draft.Registered {
 		t.Fatal("a failed check was treated as a definite answer")
+	}
+}
+
+// Viloyat va tuman YOPIQ ro'yxatdan chiqadi: profilga ixtiyoriy matn
+// tushmasligi kerak, aks holda sayt/ilova bilan nomlar mos kelmay qolardi.
+func TestRegistrationAddressComesFromTheClosedList(t *testing.T) {
+	h := workerSetup(t)
+	h.a.newUser = true
+	h.a.profile = Profile{ID: "worker"}
+	h.text("/register")
+	h.flowClick("agree")
+	own := h.message("")
+	own.Contact = &tg.Contact{UserID: 42, PhoneNumber: "998901234567"}
+	h.send(own)
+	h.text("Ali")
+	h.text("Karimov")
+
+	// Ro'yxatda yo'q nom qabul qilinmaydi va saqlanmaydi.
+	h.text("Marsdagi viloyat")
+	if h.s.draft.Worker.Step != "region" || h.a.profile.Region != "" {
+		t.Fatalf("unknown region accepted: %+v", h.a.profile)
+	}
+	// Yozilgan nom ro'yxatga solishtiriladi — registr va apostrof shakli
+	// e'tiborga olinmaydi.
+	h.text("farg'ona")
+	if h.s.draft.Worker.Step != "district" || h.s.draft.Worker.Profile.Region != "Farg\u02bbona" {
+		t.Fatalf("typed region not matched: %+v", h.s.draft.Worker.Profile)
+	}
+	// «Tumani» qo'shimchasisiz yozilgan tuman ham topilishi kerak.
+	h.text("Quva")
+	if h.s.draft.Worker != nil {
+		t.Fatal("registration did not finish")
+	}
+	if h.a.profile.District != "Quva tumani" {
+		t.Fatalf("typed district not matched: %+v", h.a.profile)
+	}
+}
+
+// Viloyat almashsa eski tuman unga tegishli bo'lmasligi mumkin — u bekor
+// qilinib, qaytadan so'ralishi kerak.
+func TestChangingRegionClearsTheDistrict(t *testing.T) {
+	h := workerSetup(t)
+	h.a.newUser = true
+	h.a.profile = Profile{ID: "worker"}
+	h.text("/register")
+	h.flowClick("agree")
+	own := h.message("")
+	own.Contact = &tg.Contact{UserID: 42, PhoneNumber: "998901234567"}
+	h.send(own)
+	h.text("Ali")
+	h.text("Karimov")
+	h.flowClick("r0")
+	if h.s.draft.Worker.Step != "district" {
+		t.Fatal("region did not lead to the district step")
+	}
+	h.flowClick("region") // «Viloyatni o'zgartirish»
+	if h.s.draft.Worker.Step != "region" || h.s.draft.Worker.Profile.District != "" {
+		t.Fatalf("district survived a region change: %+v", h.s.draft.Worker.Profile)
+	}
+	if h.a.profile.Region != "" {
+		t.Fatal("an incomplete address was saved")
+	}
+}
+
+// Tumanlar sahifalanadi: eng katta viloyatda 22 ta tuman bor va hammasi
+// bitta xabarga sig'maydi.
+func TestDistrictListIsPaged(t *testing.T) {
+	f := &WorkerFlow{Key: "k", Profile: Profile{Region: "Toshkent viloyati"}, Page: 1}
+	first := profileDistrictRows(f)
+	f.Page = 2
+	second := profileDistrictRows(f)
+	if len(districtsOf("Toshkent viloyati")) <= districtsPerPage {
+		t.Skip("fixture region no longer needs paging")
+	}
+	if len(first) < districtsPerPage || len(second) < 2 {
+		t.Fatalf("paging rows: first=%d second=%d", len(first), len(second))
+	}
+	// Har ikkala sahifada ham «Viloyatni o'zgartirish» qatori bo'lishi kerak.
+	for _, rows := range [][][]tg.InlineKeyboardButton{first, second} {
+		last := rows[len(rows)-1]
+		if len(last) != 1 || !strings.Contains(last[0].Text, "Viloyatni") {
+			t.Fatal("region change button missing")
+		}
+	}
+}
+
+// Ariza berish oqimi familiya SO'RAMAYDI: mavjud hisoblarning ko'pida u
+// yo'q va uni ish topish o'rtasida talab qilish chalg'itardi.
+func TestApplyDoesNotAskForTheLastName(t *testing.T) {
+	steps := profileSteps("apply", Profile{})
+	for _, s := range steps {
+		if s.step == "last_name" {
+			t.Fatal("apply flow asks for the last name")
+		}
+	}
+	if len(profileSteps("register", Profile{})) != len(steps)+1 {
+		t.Fatal("registration does not add the last name step")
+	}
+}
+
+// Har bir viloyatda tuman bo'lishi shart: bo'sh ro'yxat oqimni boshi berk
+// ko'chaga olib borardi.
+func TestEveryRegionHasDistricts(t *testing.T) {
+	if len(uzRegions) < 14 {
+		t.Fatalf("only %d regions loaded", len(uzRegions))
+	}
+	for _, r := range uzRegions {
+		if len(r.Districts) == 0 {
+			t.Fatalf("%s has no districts", r.Name)
+		}
 	}
 }

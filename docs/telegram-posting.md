@@ -49,19 +49,41 @@ o'tay, ishni keyin qidiraman» degan odam saytga o'tishga majbur edi.
 
 Doimiy tugma ATAYLAB yo'q. Bosh menyu ochilganda bot imzolangan sessiya
 so'rovi bilan holatni tekshiradi va **faqat hisobi yo'q** odamga taklif
-yuboradi: shu yerda ro'yxatdan o'tish, Android ilova va sayt — uchala yo'l
-birga, chunki hisob uchalasida bitta. Ro'yxatdan o'tgan odamga taklif
+yuboradi. Taklifda bot nima qilishi qisqa aytiladi (ish topish, e'lon
+berish, arizalarni kuzatish, hudud bo'yicha xabar) va uchala yo'l birga
+beriladi: shu yerda ro'yxatdan o'tish, Android ilova va sayt — chunki hisob
+uchalasida bitta.
+
+Hisobini o'chirgan odam ham shu holatga tushadi: `POST /api/auth/bot/session`
+o'chirilgan hisobni topmaydi (`isDeleted` filtri) va `contact_required`
+qaytaradi, ya'ni unga ham to'liq taklif ko'rsatiladi. Ro'yxatdan o'tgan odamga taklif
 umuman chiqmaydi va natija draft'da keshlanadi, ya'ni menyu har ochilganda
 qayta so'rov ketmaydi. Faqat ijobiy natija keshlanadi: hisobi yo'q odam
 keyingi daqiqada ochishi mumkin. Tekshiruv yiqilsa (tarmoq, 5xx) taklif
 jimgina o'tkazib yuboriladi — bosh menyu hisobsiz ham to'liq ishlaydi.
 
-Qadamlar ariza oqimidagi bilan ayni: foydalanish shartlariga rozilik,
-Telegram orqali **o'z** raqamini ulashish (boshqa odamning kontakti yoki
-qo'lda yozilgan raqam qabul qilinmaydi), so'ng ism, yashash viloyati va
-tumani. Ma'lumot ayni `PATCH /api/me` orqali saqlanadi — sayt, mobil ilova
-va botdagi hisob bitta bo'lib qoladi va u yerda qaytadan ro'yxatdan o'tish
-shart emas.
+Qadamlar: foydalanish shartlariga rozilik, Telegram orqali **o'z** raqamini
+ulashish (boshqa odamning kontakti yoki qo'lda yozilgan raqam qabul
+qilinmaydi), so'ng ism, familiya, yashash viloyati va tumani. Ma'lumot ayni
+`PATCH /api/me` orqali saqlanadi — sayt, mobil ilova va botdagi hisob bitta
+bo'lib qoladi va u yerda qaytadan ro'yxatdan o'tish shart emas.
+
+Viloyat va tuman **yopiq ro'yxatdan** tanlanadi: 14 ta viloyat tugmasi, so'ng
+tanlangan viloyatning tumanlari (8 tadan sahifalanadi, eng kattasida 22 ta).
+Ro'yxat manbasi `apps/web/lib/regions.ts` — bot alohida Go moduli bo'lgani
+uchun u `internal/posting/districts.go` ga nusxalangan va nomlar AYNAN bir
+xil bo'lishi shart, aks holda bitta hisob sayt bilan botda boshqa manzil
+ko'rsatardi.
+
+Tugma o'rniga nom yozish ham mumkin: registr, bo'shliq va apostrof shakli
+(`'`, `'`, `ʻ`) e'tiborga olinmaydi, «tumani»/«shahri» qo'shimchasi esa
+ixtiyoriy — «quva» ham «Quva tumani» ni topadi. Ro'yxatda yo'q nom qabul
+qilinmaydi, ya'ni profilga ixtiyoriy matn tushmaydi. Viloyat almashtirilsa
+oldin tanlangan tuman bekor qilinadi.
+
+**Familiya faqat ro'yxatdan o'tishda so'raladi.** Ariza berish oqimi uni
+so'ramaydi: mavjud hisoblarning ko'pida familiya yo'q va uni ish topish
+o'rtasida talab qilish odamni chalg'itardi.
 
 Tasdiq bosqichi yo'q: ro'yxatdan o'tish hech kimga ma'lumot yubormaydi.
 Hisob allaqachon to'liq bo'lsa bot «allaqachon ro'yxatdan o'tgansiz» deb

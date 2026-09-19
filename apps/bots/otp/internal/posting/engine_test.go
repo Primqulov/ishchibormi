@@ -131,7 +131,7 @@ type harness struct {
 
 func setup(t *testing.T) *harness {
 	s := &memoryStore{}
-	a := &fakeAPI{profile: Profile{ID: "owner", Phone: "+998901234567", FirstName: "Ali", Region: "Toshkent", District: "Yunusobod"}}
+	a := &fakeAPI{profile: Profile{ID: "owner", Phone: "+998901234567", FirstName: "Ali", LastName: "Karimov", Region: "Toshkent", District: "Yunusobod"}}
 	b := &fakeBot{}
 	e := &Engine{Store: s, API: a, Bot: b, WebURL: "https://ishchibormi.uz", Searches: NewSearchSessions(), Now: func() time.Time { return time.Date(2026, 9, 16, 10, 0, 0, 0, tashkent) }, MiniAppURL: "https://mini.test/miniapp/post"}
 	return &harness{e: e, s: s, a: a, b: b, t: t}
