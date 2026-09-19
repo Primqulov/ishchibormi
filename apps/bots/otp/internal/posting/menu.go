@@ -20,13 +20,15 @@ const (
 	btnFindJobs = "📍 Ish topish"
 	btnMyApps   = "📋 Arizalarim"
 	btnPostJob  = "➕ E'lon berish"
+	btnRegister = "📝 Ro'yxatdan o'tish"
 	btnHelp     = "ℹ️ Yordam"
 )
 
 func MainKeyboard() tg.ReplyKeyboardMarkup {
 	kb := tg.NewReplyKeyboard(
 		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnFindJobs), tg.NewKeyboardButton(btnMyApps)),
-		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnPostJob), tg.NewKeyboardButton(btnHelp)),
+		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnPostJob), tg.NewKeyboardButton(btnRegister)),
+		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnHelp)),
 	)
 	kb.ResizeKeyboard = true
 	return kb
@@ -42,6 +44,8 @@ func KeyboardCommand(text string) string {
 		return "applications"
 	case btnPostJob:
 		return "post"
+	case btnRegister:
+		return "register"
 	case btnHelp:
 		return "help"
 	}

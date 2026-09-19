@@ -108,6 +108,7 @@ func main() {
 	}
 	_, _ = bot.Request(tgbotapi.NewSetMyCommands(
 		tgbotapi.BotCommand{Command: "start", Description: "Bosh menyu"},
+		tgbotapi.BotCommand{Command: "register", Description: "Ro'yxatdan o'tish yoki profilni ko'rish"},
 		tgbotapi.BotCommand{Command: "jobs", Description: "Joylashuv bo'yicha yaqin ishlar"},
 		tgbotapi.BotCommand{Command: "applications", Description: "Arizalarim va ish tarixi"},
 		tgbotapi.BotCommand{Command: "myjobs", Description: "Qabul qilingan ishlarim"},

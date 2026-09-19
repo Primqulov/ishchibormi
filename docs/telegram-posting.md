@@ -41,10 +41,30 @@ foydalanuvchi ma'lumotni qayta kiritmasdan yuborishni takrorlashi mumkin.
 Forma sahifani yopgandan keyin tiklanadigan qoralama sifatida saqlanmaydi;
 Telegram yopishdan oldin tasdiq so'raydi.
 
+## Ro'yxatdan o'tish
+
+`/register` yoki menyudagi **Ro'yxatdan o'tish** hisob ochishning mustaqil
+yo'li. Ilgari hisob faqat yo'l-yo'lakay — ariza berish ichida — yaratilardi,
+ya'ni «avval ro'yxatdan o'tay, ishni keyin qidiraman» degan odam saytga
+o'tishga majbur edi.
+
+Qadamlar ariza oqimidagi bilan ayni: foydalanish shartlariga rozilik,
+Telegram orqali **o'z** raqamini ulashish (boshqa odamning kontakti yoki
+qo'lda yozilgan raqam qabul qilinmaydi), so'ng ism, yashash viloyati va
+tumani. Ma'lumot ayni `PATCH /api/me` orqali saqlanadi — sayt, mobil ilova
+va botdagi hisob bitta bo'lib qoladi va u yerda qaytadan ro'yxatdan o'tish
+shart emas.
+
+Tasdiq bosqichi yo'q: ro'yxatdan o'tish hech kimga ma'lumot yubormaydi.
+Hisob allaqachon to'liq bo'lsa bot «allaqachon ro'yxatdan o'tgansiz» deb
+joriy profilni ko'rsatadi — yangi hisob ochilgandek tuyulmasligi uchun.
+Buyruqni qayta yuborish yetishmayotgan maydonlarni to'ldirish uchun
+ishlatiladi. Ish qidirish baribir ro'yxatdan o'tishni talab qilmaydi.
+
 ## Ish qidirish va arizalar
 
 - `/start` yoki `/menu`: yaqin ishlar, arizalar, qabul qilingan ishlar,
-  kelgan arizalar, e'lon berish va yordam.
+  kelgan arizalar, e'lon berish, ro'yxatdan o'tish va yordam.
 - `/jobs`: joylashuv yuborish, eng yaqinidan saralash, bugun/ertaga/barcha
   kunlar va kategoriya filtrlari. Qidirish ro'yxatdan o'tishni talab qilmaydi.
   Telegram lokatsiyasi, venue yoki `lat, lng` matni qabul qilinadi.

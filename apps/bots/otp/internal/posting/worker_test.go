@@ -281,3 +281,79 @@ func TestSearchDateCategoryPersistThroughPagesAndResetOnLocation(t *testing.T) {
 		t.Fatal("location must reset page and preserve filters")
 	}
 }
+
+// Ro'yxatdan o'tish ariza oqimidan MUSTAQIL bo'lishi kerak: foydalanuvchi
+// hech qanday e'lonni tanlamasdan hisob ocha olsin.
+func TestWorkerRegisterLinksAccountAndCompletesProfile(t *testing.T) {
+	h := workerSetup(t)
+	h.a.newUser = true
+	h.a.profile = Profile{ID: "worker"}
+	h.text("/register")
+	if h.s.draft.Worker == nil || h.s.draft.Worker.Step != "consent" {
+		t.Fatal("registration skipped consent")
+	}
+	h.flowClick("agree")
+	foreign := h.message("")
+	foreign.Contact = &tg.Contact{UserID: 43, PhoneNumber: "998901112233"}
+	h.send(foreign)
+	if h.s.draft.Worker.Step != "contact" || h.a.profile.Phone != "" {
+		t.Fatal("foreign contact created an account")
+	}
+	own := h.message("")
+	own.Contact = &tg.Contact{UserID: 42, PhoneNumber: "998901234567"}
+	h.send(own)
+	h.text("Ali")
+	h.text("Toshkent")
+	h.text("Chilonzor")
+	if h.s.draft.Worker != nil {
+		t.Fatal("registration flow left open")
+	}
+	if h.a.profile.FirstName != "Ali" || h.a.profile.Region != "Toshkent" || h.a.profile.District != "Chilonzor" {
+		t.Fatalf("profile not saved: %+v", h.a.profile)
+	}
+	// Yakuniy xabar oqimning o'z nusxasidan quriladi: sessiya profil
+	// qadamlaridan OLDIN olingani uchun s.User hali bo'sh bo'lardi.
+	if !h.hasText("Ro'yxatdan o'tdingiz") || !h.hasText("Ali") || !h.hasText("+998901234567") {
+		t.Fatal("registration summary missing name or phone")
+	}
+}
+
+func TestWorkerRegisterDoesNotPresentExistingAccountAsNewSignup(t *testing.T) {
+	h := workerSetup(t) // setup() profili to'liq: Ali / Toshkent / Yunusobod
+	h.text("/register")
+	if h.s.draft.Worker != nil {
+		t.Fatal("complete profile should not open a flow")
+	}
+	if !h.hasText("allaqachon ro'yxatdan o'tgansiz") {
+		t.Fatal("missing already-registered notice")
+	}
+	if h.hasText("Ro'yxatdan o'tdingiz") {
+		t.Fatal("claimed a new signup for an existing account")
+	}
+}
+
+// Ro'yxatdan o'tish e'lon qoralamasini buzmasligi kerak — ariza oqimi bilan
+// bir xil kafolat.
+func TestWorkerRegisterPreservesPostingDraft(t *testing.T) {
+	h := workerSetup(t)
+	h.formToPreview("total")
+	title := h.s.draft.Form.Title
+	h.text("/register")
+	// Profil to'liq, ya'ni oqim darhol yopiladi. Qoralama tegilmasdan qoladi;
+	// Step ATAYLAB tekshirilmaydi — ro'yxatdan o'tish e'lon bosqichini
+	// o'zgartirmaydi, uni faqat /post qayta boshlaydi.
+	if h.s.draft.Form.Title != title || h.s.draft.Worker != nil {
+		t.Fatal("registration damaged the posting draft")
+	}
+}
+
+func TestRegisterButtonAndIDGuard(t *testing.T) {
+	if KeyboardCommand(btnRegister) != "register" {
+		t.Fatal("menu button does not open registration")
+	}
+	h := workerSetup(t)
+	h.workerClick("register", workerJobID)
+	if h.hasText("Ro'yxatdan") {
+		t.Fatal("registration accepted a listing ID instead of the fixed marker")
+	}
+}

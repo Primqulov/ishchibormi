@@ -22,7 +22,12 @@ type WorkerFlow struct {
 	Reason, Filter                 string
 	Page                           int
 	Employer                       bool
-	ExpiresAt                      time.Time
+	// Filled — shu oqim davomida hisob bog'landi yoki profil maydoni
+	// to'ldirildi. Ro'yxatdan o'tish yakunida «ro'yxatdan o'tdingiz» va
+	// «allaqachon ro'yxatdan o'tgansiz» xabarlarini ajratish uchun kerak:
+	// sessiyaning o'zi hisob YANGI yaratilganini bildirmaydi.
+	Filled    bool
+	ExpiresAt time.Time
 }
 
 func workerButton(label, action, id string) tg.InlineKeyboardButton {
@@ -54,8 +59,37 @@ func (e *Engine) workerHome(chat int64) error {
 		tg.NewInlineKeyboardRow(tg.NewInlineKeyboardButtonData("📍 Yaqin ishlarni topish", "jobs:start")),
 		tg.NewInlineKeyboardRow(workerButton("📋 Arizalarim", "apps", "all"), workerButton("✅ Qabul qilingan ishlar", "apps", "accepted")),
 		tg.NewInlineKeyboardRow(workerButton("📨 Kelgan arizalar", "inbox", "pending"), tg.NewInlineKeyboardButtonURL("Mening e'lonlarim", strings.TrimRight(e.WebURL, "/")+"/my-elons")),
-		tg.NewInlineKeyboardRow(workerButton("ℹ️ Qanday ishlaydi?", "help", "")))
+		tg.NewInlineKeyboardRow(workerButton("📝 Ro'yxatdan o'tish", "register", "new"), workerButton("ℹ️ Qanday ishlaydi?", "help", "")))
 }
+
+// registrationDone ro'yxatdan o'tish oqimining yakuniy xabari.
+//
+// NEGA ALOHIDA OQIM: ilgari hisob faqat yo'l-yo'lakay — ariza berish ichida —
+// yaratilardi. Ya'ni «avval ro'yxatdan o'tay, ishni keyin qidiraman» degan
+// odam saytga o'tishga majbur edi. Bu oqim ayni qadamlarni (rozilik, o'z
+// kontakti, ism/viloyat/tuman) mustaqil ravishda bajaradi va ayni API'ga
+// yozadi — sayt, mobil ilova va botdagi hisob bitta bo'lib qoladi.
+//
+// fresh=false — hisob allaqachon to'liq edi: bu holda xabar «ro'yxatdan
+// o'tdingiz» demaydi, aks holda foydalanuvchi ikkinchi hisob ochdim deb
+// o'ylashi mumkin.
+func (e *Engine) registrationDone(chat int64, p Profile, fresh bool) error {
+	name := strings.TrimSpace(p.FirstName + " " + p.LastName)
+	if name == "" {
+		name = "—"
+	}
+	head := "✅ Ro'yxatdan o'tdingiz."
+	if !fresh {
+		head = "Siz allaqachon ro'yxatdan o'tgansiz."
+	}
+	text := head + "\n\n👤 " + name + "\n📞 " + p.Phone + "\n📍 " + strings.TrimSpace(p.Region+", "+p.District) +
+		"\n\nShu hisob sayt va mobil ilovada ham ishlaydi — u yerda qaytadan ro'yxatdan o'tish shart emas." +
+		"\n\nMa'lumotni o'zgartirish uchun /register ni qayta yuboring."
+	return e.workerMessage(chat, text,
+		tg.NewInlineKeyboardRow(tg.NewInlineKeyboardButtonData("📍 Ish topish", "jobs:start")),
+		tg.NewInlineKeyboardRow(workerButton("⬅️ Bosh menyu", "home", "")))
+}
+
 func (e *Engine) saveWorker(ctx context.Context, d *Draft, update int) error {
 	if d.Worker != nil {
 		d.Worker.Key = primitive.NewObjectID().Hex()[12:]
@@ -106,6 +140,8 @@ func (e *Engine) handleWorker(ctx context.Context, u tg.Update, d *Draft) (bool,
 			action, id = "inbox", "pending"
 		case "alerts":
 			action, id = "alert", "status"
+		case "register":
+			action, id = "register", "new"
 		}
 	}
 	active := d.Worker != nil
@@ -143,7 +179,7 @@ func (e *Engine) handleWorker(ctx context.Context, u tg.Update, d *Draft) (bool,
 			return true, err
 		}
 		if action == "help" {
-			return true, e.workerMessage(d.ChatID, "1. /jobs → joylashuvingizni yuboring (kompyuterdan kirgan bo'lsangiz «🏙 Viloyat bo'yicha»), so'ng sana va ish turini tanlang.\n2. «Ariza berish» → o'z telefoningizni ulashing, necha kishi borishingizni tanlab tasdiqlang.\n3. /applications orqali javobni kuzating. Ariza yuborish ishga qabul qilindingiz degani emas.\n4. Qabul qilingach, ish beruvchi bilan bog'lanib, vaqt va manzilni kelishib oling.\n5. Ish haqiqatan tugagach, «Ishni tugatdim»ni tasdiqlang. Bu to'lov qabul qilinganini tasdiqlamaydi.\n6. /alerts — ish signali: belgilagan hududingizda yangi e'lon chiqqanda bot o'zi xabar beradi.\n\nBora olmasangiz, arizani sababini yozib bekor qiling.\nPastdagi tugmalar doim shu yerda: ish topish, arizalarim, e'lon berish.\n/menu — bosh menyu. /post — Mini App orqali e'lon berish.", tg.NewInlineKeyboardRow(workerButton("Bosh menyu", "home", "")))
+			return true, e.workerMessage(d.ChatID, "0. /register → ro'yxatdan o'tish: rozilik, o'z telefoningiz va ism/hudud. Ish qidirish uchun shart emas, ariza berish uchun kerak.\n1. /jobs → joylashuvingizni yuboring (kompyuterdan kirgan bo'lsangiz «🏙 Viloyat bo'yicha»), so'ng sana va ish turini tanlang.\n2. «Ariza berish» → o'z telefoningizni ulashing, necha kishi borishingizni tanlab tasdiqlang.\n3. /applications orqali javobni kuzating. Ariza yuborish ishga qabul qilindingiz degani emas.\n4. Qabul qilingach, ish beruvchi bilan bog'lanib, vaqt va manzilni kelishib oling.\n5. Ish haqiqatan tugagach, «Ishni tugatdim»ni tasdiqlang. Bu to'lov qabul qilinganini tasdiqlamaydi.\n6. /alerts — ish signali: belgilagan hududingizda yangi e'lon chiqqanda bot o'zi xabar beradi.\n\nBora olmasangiz, arizani sababini yozib bekor qiling.\nPastdagi tugmalar doim shu yerda: ish topish, arizalarim, e'lon berish.\n/menu — bosh menyu. /post — Mini App orqali e'lon berish.", tg.NewInlineKeyboardRow(workerButton("Bosh menyu", "home", "")))
 		}
 		if action == "post" {
 			return true, e.miniAppMessage(d.ChatID, "E'lon berish uchun Mini App'ni oching.")
@@ -186,6 +222,11 @@ func (e *Engine) handleWorker(ctx context.Context, u tg.Update, d *Draft) (bool,
 	case "alert":
 		// Bu yerda ObjectID emas, rejim keladi.
 		if id != "on" && id != "off" && id != "status" {
+			return true, nil
+		}
+	case "register":
+		// Ro'yxatdan o'tishda e'lon/ariza ID si yo'q — faqat sobit belgi.
+		if id != "new" {
 			return true, nil
 		}
 	case "apply", "app", "cancel", "done", "accept", "reject":
@@ -237,7 +278,7 @@ func (e *Engine) workerSession(ctx context.Context, d *Draft) (Session, error) {
 func (e *Engine) workerAuthenticated(ctx context.Context, d *Draft, update int, s Session) error {
 	f := d.Worker
 	f.UserID, f.Profile = s.User.ID, s.User
-	if f.Purpose == "apply" {
+	if f.Purpose == "apply" || f.Purpose == "register" {
 		for _, field := range []struct{ step, text string }{{"first_name", f.Profile.FirstName}, {"region", f.Profile.Region}, {"district", f.Profile.District}} {
 			if strings.TrimSpace(field.text) == "" {
 				f.Step = field.step
@@ -271,6 +312,18 @@ func (e *Engine) prepareWorker(ctx context.Context, d *Draft, update int, s Sess
 			return err
 		}
 		return e.handleAlert(ctx, d, s, f.ID)
+	case "register":
+		// Bu yerga yetib kelindi — demak hisob bor va workerAuthenticated
+		// profilni to'liq qilib bo'ldi. Tasdiq bosqichi yo'q: ro'yxatdan
+		// o'tish hech narsani boshqa odamga yubormaydi.
+		d.Worker = nil
+		if err := e.saveWorker(ctx, d, update); err != nil {
+			return err
+		}
+		// ATAYLAB s.User EMAS: sessiya profil qadamlari boshlanishidan oldin
+		// olingan, ya'ni unda hali yangi kiritilgan ism/hudud yo'q. Oqimning
+		// o'z nusxasi — SaveProfile'ga yuborilgan ayni ma'lumot.
+		return e.registrationDone(d.ChatID, f.Profile, f.Filled)
 	case "apply":
 		job, err := e.API.Job(ctx, s, f.ID)
 		if err != nil {
@@ -345,6 +398,7 @@ func (e *Engine) continueWorker(ctx context.Context, d *Draft, update int, m *tg
 		if err != nil {
 			return e.say(d.ChatID, workerError(err))
 		}
+		f.Filled = true
 		if err := e.workerMessage(d.ChatID, "✅ Hisobingiz bog'landi."); err != nil {
 			return err
 		}
@@ -370,7 +424,7 @@ func (e *Engine) continueWorker(ctx context.Context, d *Draft, update int, m *tg
 		case "district":
 			p.District = text
 		}
-		f.Profile = p
+		f.Profile, f.Filled = p, true
 		for _, field := range []struct{ step, text string }{{"first_name", p.FirstName}, {"region", p.Region}, {"district", p.District}} {
 			if strings.TrimSpace(field.text) == "" {
 				f.Step = field.step
