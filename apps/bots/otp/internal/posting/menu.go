@@ -1,0 +1,94 @@
+package posting
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	tg "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
+
+// Doimiy pastki menyu.
+//
+// NEGA KERAK: ilgari bot deyarli har xabardan keyin klaviaturani olib
+// tashlardi, ya'ni foydalanuvchi /jobs, /applications kabi buyruqlarni yodda
+// tutishi kerak edi. Bu tugmalar chatda turib qoladi va hech narsani eslab
+// qolish shart emas. Tugma bosilganda oddiy matn keladi — cmd/bot/main.go uni
+// KeyboardCommand orqali buyruqqa aylantiradi, shuning uchun qolgan mantiq
+// o'zgarishsiz qoladi.
+const (
+	btnFindJobs = "📍 Ish topish"
+	btnMyApps   = "📋 Arizalarim"
+	btnPostJob  = "➕ E'lon berish"
+	btnHelp     = "ℹ️ Yordam"
+)
+
+func MainKeyboard() tg.ReplyKeyboardMarkup {
+	kb := tg.NewReplyKeyboard(
+		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnFindJobs), tg.NewKeyboardButton(btnMyApps)),
+		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnPostJob), tg.NewKeyboardButton(btnHelp)),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
+// KeyboardCommand pastki menyu tugmasining matnini buyruq nomiga o'giradi.
+// Tanilmagan matn uchun bo'sh satr — bunday xabar odatdagidek ishlanadi.
+func KeyboardCommand(text string) string {
+	switch strings.TrimSpace(text) {
+	case btnFindJobs:
+		return "jobs"
+	case btnMyApps:
+		return "applications"
+	case btnPostJob:
+		return "post"
+	case btnHelp:
+		return "help"
+	}
+	return ""
+}
+
+// Sayt tokeni shuncha vaqt kutiladi. OTP kodining o'zi qisqaroq yashaydi;
+// bu — «/start bosdim, keyin chalg'idim» holati uchun yuqori chegara.
+const authTokenTTL = 30 * time.Minute
+
+// SaveAuthToken saytdan kelgan sessiya tokenini draft'ga yozadi.
+//
+// Token ilgari faqat bot xotirasida (map) turardi: /start bilan kontakt
+// ulashish orasida bot qayta ishga tushsa, kod tokensiz yozilar va
+// foydalanuvchi saytda «kod noto'g'ri» xabarini olardi. Mongo'dagi draft
+// restartdan omon qoladi.
+func (e *Engine) SaveAuthToken(ctx context.Context, chatID int64, token string) error {
+	if token == "" {
+		return nil
+	}
+	d, err := e.Store.Load(ctx, chatID)
+	if err != nil {
+		return err
+	}
+	if d == nil {
+		d = freshDraft(chatID)
+		d.Step = "menu"
+	}
+	d.AuthToken, d.AuthTokenAt = token, e.now()
+	return e.Store.Save(ctx, d)
+}
+
+// TakeAuthToken tokenni qaytaradi va darhol o'chiradi: bitta token faqat
+// bitta kod uchun. Muddati o'tgan token ham o'chiriladi va bo'sh qaytadi.
+func (e *Engine) TakeAuthToken(ctx context.Context, chatID int64) string {
+	d, err := e.Store.Load(ctx, chatID)
+	if err != nil || d == nil || d.AuthToken == "" {
+		return ""
+	}
+	token := d.AuthToken
+	fresh := d.AuthTokenAt.Add(authTokenTTL).After(e.now())
+	d.AuthToken, d.AuthTokenAt = "", time.Time{}
+	if err := e.Store.Save(ctx, d); err != nil {
+		return ""
+	}
+	if !fresh {
+		return ""
+	}
+	return token
+}

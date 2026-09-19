@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -14,6 +17,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/ishchibormi/bot/internal/envfile"
+	"github.com/ishchibormi/bot/internal/posting"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -65,14 +69,63 @@ func main() {
 	otpCol := mc.Database(dbName).Collection("otp_codes")
 	usersCol := mc.Database(dbName).Collection("users")
 
-	bot, err := tgbotapi.NewBotAPI(token)
+	bot, err := tgbotapi.NewBotAPIWithClient(token, tgbotapi.APIEndpoint, &http.Client{Timeout: 40 * time.Second})
 	if err != nil {
 		log.Fatalf("bot: %v", err)
 	}
 	log.Printf("bot started: @%s", bot.Self.UserName)
-
-	// Pending tokens per chatID (so /start <token>, then contact comes later)
-	pending := map[int64]string{}
+	postingAPI, err := posting.NewClient(getenv("BOT_API_BASE_URL", "http://127.0.0.1:8080"), os.Getenv("BOT_SHARED_SECRET"))
+	if err != nil {
+		log.Fatalf("posting configuration: %v", err)
+	}
+	s3PhotoBase := os.Getenv("AWS_S3_PUBLIC_BASE_URL")
+	if s3PhotoBase == "" && os.Getenv("AWS_S3_BUCKET") != "" {
+		s3PhotoBase = fmt.Sprintf("https://%s.s3.%s.amazonaws.com", os.Getenv("AWS_S3_BUCKET"), getenv("AWS_REGION", "eu-central-1"))
+	}
+	photoLoader, err := posting.NewJobPhotoLoader(
+		strings.TrimRight(getenv("BOT_API_BASE_URL", "http://127.0.0.1:8080"), "/")+"/uploads",
+		os.Getenv("UPLOAD_PUBLIC_BASE"), s3PhotoBase,
+	)
+	if err != nil {
+		log.Fatalf("listing photo configuration: %v", err)
+	}
+	miniAppURL := getenv("TELEGRAM_MINIAPP_URL", strings.TrimRight(getenv("WEB_BASE_URL", "https://ishchibormi.uz"), "/")+"/miniapp/post")
+	if !posting.ValidMiniAppURL(miniAppURL) {
+		log.Fatal("TELEGRAM_MINIAPP_URL must be an HTTPS URL")
+	}
+	webURL := getenv("WEB_BASE_URL", "https://ishchibormi.uz")
+	poster := &posting.Engine{
+		Store: posting.MongoStore{Col: mc.Database(dbName).Collection("telegram_posting_drafts")},
+		API:   postingAPI, Bot: bot, WebURL: webURL,
+		MiniAppURL: miniAppURL,
+		LoadPhoto:  photoLoader,
+		Searches:   posting.NewSearchSessions(),
+	}
+	go poster.Searches.Run(ctx)
+	menu, _ := json.Marshal(map[string]any{"type": "web_app", "text": "E'lon berish", "web_app": map[string]string{"url": miniAppURL}})
+	if _, err := bot.MakeRequest("setChatMenuButton", tgbotapi.Params{"menu_button": string(menu)}); err != nil {
+		log.Print("Mini App menu button could not be set")
+	}
+	_, _ = bot.Request(tgbotapi.NewSetMyCommands(
+		tgbotapi.BotCommand{Command: "start", Description: "Bosh menyu"},
+		tgbotapi.BotCommand{Command: "jobs", Description: "Joylashuv bo'yicha yaqin ishlar"},
+		tgbotapi.BotCommand{Command: "applications", Description: "Arizalarim va ish tarixi"},
+		tgbotapi.BotCommand{Command: "myjobs", Description: "Qabul qilingan ishlarim"},
+		tgbotapi.BotCommand{Command: "candidates", Description: "E'lonlarimga kelgan arizalar"},
+		tgbotapi.BotCommand{Command: "alerts", Description: "Ish signali: yangi e'lonlar haqida xabar"},
+		tgbotapi.BotCommand{Command: "menu", Description: "Bosh menyu"},
+		tgbotapi.BotCommand{Command: "help", Description: "Botdan foydalanish"},
+		tgbotapi.BotCommand{Command: "post", Description: "Mini App orqali e'lon berish"},
+		tgbotapi.BotCommand{Command: "cancel", Description: "Joriy suhbatni to'xtatish"},
+	))
+	handlePosting := func(u tgbotapi.Update) {
+		if err := poster.Handle(ctx, u); err != nil {
+			log.Print("posting update failed; draft can be resumed")
+			if u.Message != nil && u.Message.Chat != nil && u.Message.Chat.Type == "private" {
+				_, _ = bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "Oxirgi amalni bajarib bo'lmadi. /menu orqali davom eting. Ariza holati: /applications. E'lon formasi: /post."))
+			}
+		}
+	}
 
 	upd := tgbotapi.NewUpdate(0)
 	upd.Timeout = 30
@@ -82,96 +135,194 @@ func main() {
 		log.Println("shutdown signal — stopping updates")
 		bot.StopReceivingUpdates() // updates kanalini yopadi, quyidagi for tugaydi
 	}()
-	for u := range updates {
-		if u.Message == nil {
-			continue
-		}
-		m := u.Message
-		switch {
-		case m.IsCommand() && m.Command() == "start":
-			args := strings.TrimSpace(m.CommandArguments())
-
-			// ── Known user shortcut ───────────────────────────────────
-			// If we've seen this Telegram user before AND we have their
-			// phone in the users collection, skip the contact-share step
-			// and just issue a fresh code immediately.
-			if phone, ok := findKnownPhone(ctx, usersCol, m.From.ID); ok {
-				// Sessiyaga bog'lanmagan kod foydasiz — noSessionMessage izohi.
-				if args == "" {
-					log.Printf("start without session token (known user tgID=%d)", m.From.ID)
-					_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID, noSessionMessage))
+	handleUpdates := func(updates <-chan tgbotapi.Update) {
+		// Each chat always runs on the same worker, including its OTP handshake.
+		pending := map[int64]string{}
+		for u := range updates {
+			if u.CallbackQuery != nil {
+				if u.CallbackQuery.From != nil && (strings.HasPrefix(u.CallbackQuery.Data, "p:") || strings.HasPrefix(u.CallbackQuery.Data, "jobs:") || strings.HasPrefix(u.CallbackQuery.Data, "w:")) {
+					delete(pending, u.CallbackQuery.From.ID)
+				}
+				handlePosting(u)
+				continue
+			}
+			if u.Message == nil {
+				continue
+			}
+			m := u.Message
+			if m.From == nil || m.Chat == nil || m.Chat.Type != "private" || m.From.ID != m.Chat.ID {
+				continue
+			}
+			// Doimiy pastki menyu tugmalari oddiy matn yuboradi. Ularni shu
+			// yerda buyruqqa aylantiramiz — quyidagi butun mantiq (va Engine)
+			// o'zgarishsiz qoladi.
+			if !m.IsCommand() {
+				if cmd := posting.KeyboardCommand(m.Text); cmd != "" {
+					asCommand(m, cmd)
+				}
+			}
+			if isBotCommand(m) {
+				delete(pending, m.Chat.ID)
+				handlePosting(u)
+				continue
+			}
+			if m.Contact != nil && pending[m.Chat.ID] == "" {
+				handlePosting(u)
+				continue
+			}
+			switch {
+			case m.IsCommand() && m.Command() == "start":
+				poster.StopJobSearch(m.Chat.ID)
+				if err := poster.StopWorker(ctx, m.Chat.ID); err != nil {
+					log.Print("worker conversation reset failed")
 					continue
 				}
-				code, err := generateAndStore(ctx, otpCol, args, phone, m.From.ID, otpTTL, otpLen)
+				args := strings.TrimSpace(m.CommandArguments())
+
+				// ── Known user shortcut ───────────────────────────────────
+				// If we've seen this Telegram user before AND we have their
+				// phone in the users collection, skip the contact-share step
+				// and just issue a fresh code immediately.
+				if phone, ok := findKnownPhone(ctx, usersCol, m.From.ID); ok {
+					// Sessiyaga bog'lanmagan kod foydasiz — noSessionMessage izohi.
+					if args == "" {
+						log.Printf("start without session token (known user tgID=%d)", m.From.ID)
+						sendNoSession(bot, m.Chat.ID, webURL)
+						continue
+					}
+					code, err := generateAndStore(ctx, otpCol, args, phone, m.From.ID, otpTTL, otpLen)
+					if err != nil {
+						log.Printf("otp store failed (known user tgID=%d): %v", m.From.ID, err)
+						_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID, "Xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring."))
+						continue
+					}
+					sendOTP(bot, m.Chat.ID,
+						fmt.Sprintf("Qaytib xush kelibsiz!\n\nTasdiqlash kodingiz: `%s`\n\n(Kodni nusxalash uchun ustiga bosing.)\nKodni saytda kiriting. Kod %d daqiqa amal qiladi.",
+							code, int(otpTTL/time.Minute)), webURL)
+					delete(pending, m.Chat.ID)
+					continue
+				}
+
+				// ── First-time flow: ask for contact ──────────────────────
+				if args == "" {
+					log.Printf("start without session token (tgID=%d)", m.From.ID)
+					sendNoSession(bot, m.Chat.ID, webURL)
+					continue
+				}
+				pending[m.Chat.ID] = args
+				// Xotiradagi nusxadan tashqari draft'ga ham yozamiz: bot shu
+				// yerda qayta ishga tushsa, kontakt kelganda token topiladi.
+				if err := poster.SaveAuthToken(ctx, m.Chat.ID, args); err != nil {
+					log.Printf("auth token not persisted (tgID=%d)", m.From.ID)
+				}
+				req := tgbotapi.NewMessage(m.Chat.ID, "Salom! \"Ishchi Bormi\" ga xush kelibsiz.\n\nIltimos, telefon raqamingizni ulashing.")
+				kb := tgbotapi.NewReplyKeyboard(
+					tgbotapi.NewKeyboardButtonRow(tgbotapi.KeyboardButton{Text: "📞 Telefon raqamni ulashish", RequestContact: true}),
+				)
+				kb.OneTimeKeyboard = true
+				kb.ResizeKeyboard = true
+				req.ReplyMarkup = kb
+				_, _ = bot.Send(req)
+
+			case m.Contact != nil:
+				// Telegram lets a user send an arbitrary saved contact, not only the
+				// special "share my phone" contact produced by our keyboard.  Binding
+				// that arbitrary number would let an attacker authenticate as somebody
+				// else.  Telegram sets Contact.UserID only when the contact belongs to
+				// the sender, so require an exact match before issuing an OTP.
+				if !isOwnContact(m.From.ID, m.Contact.UserID) {
+					log.Printf("rejected foreign contact sender=%d contactUser=%d", m.From.ID, m.Contact.UserID)
+					_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID,
+						"Faqat o'zingizning telefon raqamingizni pastdagi tugma orqali yuboring."))
+					continue
+				}
+				phone := normalizePhone(m.Contact.PhoneNumber)
+				// Avval draft'dagi (Mongo) nusxa — u restartdan omon qoladi va
+				// o'qilishi bilan o'chiriladi. Xotiradagi `pending` — yozuv
+				// muvaffaqiyatsiz bo'lgan holat uchun zaxira.
+				token := poster.TakeAuthToken(ctx, m.Chat.ID)
+				if token == "" {
+					token = pending[m.Chat.ID]
+				}
+				if token == "" {
+					log.Printf("contact without session token (tgID=%d)", m.From.ID)
+					sendNoSession(bot, m.Chat.ID, webURL)
+					continue
+				}
+				code, err := generateAndStore(ctx, otpCol, token, phone, m.From.ID, otpTTL, otpLen)
 				if err != nil {
-					log.Printf("otp store failed (known user tgID=%d): %v", m.From.ID, err)
+					log.Printf("otp store failed (contact tgID=%d): %v", m.From.ID, err)
 					_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID, "Xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring."))
 					continue
 				}
-				msg := tgbotapi.NewMessage(m.Chat.ID,
-					fmt.Sprintf("Qaytib xush kelibsiz!\n\nTasdiqlash kodingiz: `%s`\n\n(Kodni nusxalash uchun ustiga bosing.)\nKodni saytda kiriting. Kod %d daqiqa amal qiladi.",
-						code, int(otpTTL/time.Minute)))
-				msg.ParseMode = "Markdown"
-				msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
-				_, _ = bot.Send(msg)
+				sendOTP(bot, m.Chat.ID, fmt.Sprintf("Tasdiqlash kodingiz: `%s`\n\n(Kodni nusxalash uchun ustiga bosing.)\nKodni saytda kiriting. Kod %d daqiqa amal qiladi.", code, int(otpTTL/time.Minute)), webURL)
 				delete(pending, m.Chat.ID)
-				continue
-			}
 
-			// ── First-time flow: ask for contact ──────────────────────
-			if args == "" {
-				log.Printf("start without session token (tgID=%d)", m.From.ID)
-				_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID, noSessionMessage))
-				continue
+			default:
+				handlePosting(u)
 			}
-			pending[m.Chat.ID] = args
-			req := tgbotapi.NewMessage(m.Chat.ID, "Salom! \"Ishchi Bormi\" ga xush kelibsiz.\n\nIltimos, telefon raqamingizni ulashing.")
-			kb := tgbotapi.NewReplyKeyboard(
-				tgbotapi.NewKeyboardButtonRow(tgbotapi.KeyboardButton{Text: "📞 Telefon raqamni ulashish", RequestContact: true}),
-			)
-			kb.OneTimeKeyboard = true
-			kb.ResizeKeyboard = true
-			req.ReplyMarkup = kb
-			_, _ = bot.Send(req)
-
-		case m.Contact != nil:
-			// Telegram lets a user send an arbitrary saved contact, not only the
-			// special "share my phone" contact produced by our keyboard.  Binding
-			// that arbitrary number would let an attacker authenticate as somebody
-			// else.  Telegram sets Contact.UserID only when the contact belongs to
-			// the sender, so require an exact match before issuing an OTP.
-			if !isOwnContact(m.From.ID, m.Contact.UserID) {
-				log.Printf("rejected foreign contact sender=%d contactUser=%d", m.From.ID, m.Contact.UserID)
-				_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID,
-					"Faqat o'zingizning telefon raqamingizni pastdagi tugma orqali yuboring."))
-				continue
-			}
-			phone := normalizePhone(m.Contact.PhoneNumber)
-			// `pending` xotirada: bot /start bilan kontakt ulashish orasida
-			// qayta ishga tushsa token yo'qoladi. Unda ham foydasiz kod
-			// bermaymiz.
-			token := pending[m.Chat.ID]
-			if token == "" {
-				log.Printf("contact without session token (tgID=%d)", m.From.ID)
-				_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID, noSessionMessage))
-				continue
-			}
-			code, err := generateAndStore(ctx, otpCol, token, phone, m.From.ID, otpTTL, otpLen)
-			if err != nil {
-				log.Printf("otp store failed (contact tgID=%d): %v", m.From.ID, err)
-				_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID, "Xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring."))
-				continue
-			}
-			ack := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("Tasdiqlash kodingiz: `%s`\n\n(Kodni nusxalash uchun ustiga bosing.)\nKodni saytda kiriting. Kod %d daqiqa amal qiladi.", code, int(otpTTL/time.Minute)))
-			ack.ParseMode = "Markdown"
-			ack.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
-			_, _ = bot.Send(ack)
-			delete(pending, m.Chat.ID)
-
-		default:
-			_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID, "Iltimos, /start buyrug'idan boshlang."))
 		}
 	}
+	dispatchUpdates(ctx, updates, handleUpdates)
+}
+
+// asCommand xabarni Telegram buyrug'iga aylantiradi: IsCommand()/Command()
+// aynan matn va birinchi bot_command entity'siga qaraydi, shuning uchun
+// ikkalasini ham o'rnatamiz. Uzunlik ASCII buyruq bo'lgani uchun bayt = belgi.
+func asCommand(m *tgbotapi.Message, command string) {
+	m.Text = "/" + command
+	m.Entities = []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: len(m.Text)}}
+}
+
+// httpsURL — tugmaga URL qo'yish xavfsizmi? Telegram http va localhost
+// manzillarini rad etadi va BUTUN xabarni yubormaydi, shuning uchun lokal
+// muhitda tugma umuman qo'shilmaydi.
+func httpsURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil && u.Scheme == "https" && u.Host != ""
+}
+
+// sendNoSession — bot sayt havolasisiz ochilganda. Ilgari bu yerda quruq matn
+// turardi va foydalanuvchi boshi berk ko'chaga tushardi; endi ikkala yo'l ham
+// bitta bosishda: ishlarni ko'rish yoki saytga o'tib kirish.
+func sendNoSession(bot *tgbotapi.BotAPI, chat int64, webURL string) {
+	msg := tgbotapi.NewMessage(chat, noSessionMessage)
+	rows := [][]tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardRow(tgbotapi.NewInlineKeyboardButtonData("📍 Yaqin ishlarni ko'rish", "jobs:start")),
+	}
+	if httpsURL(webURL) {
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonURL("🌐 Saytda kirish", strings.TrimRight(webURL, "/")+"/login")))
+	}
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
+	_, _ = bot.Send(msg)
+}
+
+// sendOTP kodni yuboradi va ikkita qadamni qisqartiradi: saytga qaytish
+// tugmasi (foydalanuvchi brauzerdagi varaqni qidirmaydi) va doimiy pastki
+// menyu — u ayni paytda kontakt so'ragan klaviaturani ham almashtiradi.
+func sendOTP(bot *tgbotapi.BotAPI, chat int64, text, webURL string) {
+	msg := tgbotapi.NewMessage(chat, text)
+	msg.ParseMode = "Markdown"
+	if httpsURL(webURL) {
+		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonURL("🌐 Saytga qaytish", strings.TrimRight(webURL, "/")+"/login")))
+	}
+	if _, err := bot.Send(msg); err != nil {
+		log.Print("otp message not delivered")
+		return
+	}
+	menu := tgbotapi.NewMessage(chat, "Bot orqali ham ish topishingiz mumkin — pastdagi tugmalardan foydalaning.")
+	menu.ReplyMarkup = posting.MainKeyboard()
+	_, _ = bot.Send(menu)
+}
+
+func isBotCommand(m *tgbotapi.Message) bool {
+	if !m.IsCommand() {
+		return false
+	}
+	arg := strings.TrimSpace(m.CommandArguments())
+	return m.Command() != "start" || arg == "" || arg == "post" || arg == "jobs" || strings.HasPrefix(arg, "app_") || strings.HasPrefix(arg, "job_")
 }
 
 // noSessionMessage — foydalanuvchi botni sayt/ilova havolasisiz ochganda

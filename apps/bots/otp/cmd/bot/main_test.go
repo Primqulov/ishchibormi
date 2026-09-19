@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	tg "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"strings"
+	"testing"
+)
 
 func TestIsOwnContact(t *testing.T) {
 	for _, tc := range []struct {
@@ -18,5 +22,17 @@ func TestIsOwnContact(t *testing.T) {
 				t.Fatalf("isOwnContact(%d, %d)=%v, want %v", tc.sender, tc.contactUserID, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestJobDeepLinksNeverEnterOTPHandshake(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want bool
+	}{{"/start job_123456789012345678901234", true}, {"/start job_invalid", true}, {"/start app_123456789012345678901234", true}, {"/start", true}, {"/start jobs", true}, {"/start opaque-login-token", false}, {"/jobs", true}} {
+		m := &tg.Message{Text: tc.text, Entities: []tg.MessageEntity{{Type: "bot_command", Offset: 0, Length: len(strings.Split(tc.text, " ")[0])}}}
+		if isBotCommand(m) != tc.want {
+			t.Fatal("wrong dispatch", tc.text)
+		}
 	}
 }
