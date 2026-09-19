@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/ishchibormi/backend/internal/category"
+	"github.com/ishchibormi/backend/internal/channelpost"
 	"github.com/ishchibormi/backend/internal/elonimages"
 	"github.com/ishchibormi/backend/internal/models"
 	"github.com/ishchibormi/backend/internal/moderation"
@@ -28,6 +29,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// AlertFanout — yangi e'lon haqida «ish signali» obunachilariga xabar beradi
+// (internal/jobalert). Interfeys sifatida olingan: elon paketi jobalert'ga
+// bog'lanib qolmaydi va testda oson almashtiriladi.
+type AlertFanout interface {
+	NewElon(models.Elon)
+}
+
 type Handler struct {
 	Col          *mongo.Collection
 	Categories   *mongo.Collection
@@ -35,6 +43,9 @@ type Handler struct {
 	Applications *mongo.Collection
 	Storage      *storage.Service
 	Notify       *notification.Service
+	Channel      *channelpost.Publisher
+	// nil bo'lsa e'lon yaratish oqimi umuman o'zgarmaydi.
+	Alerts AlertFanout
 
 	// Ixtiyoriy kontent tekshiruvi. AttachModerator chaqirilmasa (yoki
 	// guard o'chiq bo'lsa) e'lon yaratish/tahrirlash oqimi o'zgarmaydi.
@@ -313,6 +324,23 @@ func sniffImageMIME(data []byte) string {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	uid, _ := primitive.ObjectIDFromHex(httpx.UserID(r))
+	id, retryable, err := creationID(r, uid)
+	if err != nil {
+		httpx.Err(w, err)
+		return
+	}
+	if retryable {
+		var existing models.Elon
+		err := h.Col.FindOne(r.Context(), bson.M{"_id": id, "ownerId": uid}).Decode(&existing)
+		if err == nil {
+			httpx.JSON(w, 200, existing)
+			return
+		}
+		if !errors.Is(err, mongo.ErrNoDocuments) {
+			httpx.Err(w, err)
+			return
+		}
+	}
 	var req upsertReq
 	if err := httpx.Decode(r, &req); err != nil {
 		httpx.Err(w, err)
@@ -325,6 +353,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := validateStartDate(req.StartDate, time.Now(), false); err != nil {
 		httpx.Err(w, err)
 		return
+	}
+	// A delayed bot retry must not publish a job whose chosen start time has
+	// already passed. Successful retries were returned before this check.
+	if retryable {
+		start, parseErr := time.ParseInLocation("2006-01-02 15:04", req.StartDate+" "+req.WorkTimeFrom, uzTZ)
+		if parseErr != nil || start.Before(time.Now().Truncate(time.Minute).Add(time.Hour)) {
+			httpx.Err(w, httpx.NewError(400, "start_time_too_soon", "Ish boshlanishi hozirdan kamida 1 soat keyin bo'lishi kerak. Sana va vaqtni yangilang."))
+			return
+		}
 	}
 	if err := validateURLs(&req, h.Storage, uid.Hex()); err != nil {
 		httpx.Err(w, err)
@@ -344,7 +381,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var cat models.Category
-	if err := h.Categories.FindOne(r.Context(), bson.M{"_id": catID}).Decode(&cat); err != nil {
+	if err := h.Categories.FindOne(r.Context(), bson.M{"_id": catID, "isActive": true}).Decode(&cat); err != nil {
 		httpx.Err(w, httpx.NewError(404, "not_found", "category not found"))
 		return
 	}
@@ -364,7 +401,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	// E'lon darhol chop etiladi — alohida "qoralama" bosqichi yo'q.
 	e := models.Elon{
-		ID:                primitive.NewObjectID(),
+		ID:                id,
 		OwnerID:           uid,
 		Title:             strings.TrimSpace(req.Title),
 		CategoryID:        catID,
@@ -409,17 +446,35 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		// ko'rib chiqiladi. Foydalanuvchi buni bilmaydi (json:"-").
 		ModerationPending: modSkipped,
 	}
+	// Every client creates listings through this handler. Save the channel
+	// queue atomically with the new listing, regardless of its source.
+	// Store-review demo data stays private; Pending is nil when disabled.
+	if !e.IsReviewData {
+		e.TelegramChannel = h.Channel.Pending(now)
+	}
 	if err := elonimages.Reserve(r.Context(), h.Col.Database(), h.Storage, e.ID, uid, e.Images); err != nil {
 		httpx.Err(w, err)
 		return
 	}
 	res, err := h.Col.InsertOne(r.Context(), e)
 	if err != nil {
+		if retryable && mongo.IsDuplicateKeyError(err) {
+			var existing models.Elon
+			if loadErr := h.Col.FindOne(r.Context(), bson.M{"_id": id, "ownerId": uid}).Decode(&existing); loadErr == nil {
+				httpx.JSON(w, 200, existing)
+				return
+			}
+		}
 		httpx.Err(w, err)
 		return
 	}
 	e.ID = res.InsertedID.(primitive.ObjectID)
 	category.IncrementUsage(r.Context(), h.Categories, catID)
+	// Signal obunachilari fon rejimida xabardor qilinadi: NewElon darhol
+	// qaytadi, ya'ni e'lon yaratish javobi hech qachon kutib qolmaydi.
+	if h.Alerts != nil {
+		h.Alerts.NewElon(e)
+	}
 	httpx.JSON(w, 201, e)
 }
 

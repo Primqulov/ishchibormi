@@ -195,7 +195,7 @@ func (h *Handler) Apply(w http.ResponseWriter, r *http.Request) {
 			httpx.Err(w, err)
 			return
 		}
-		h.Notify.Push(r.Context(), elon.OwnerID, "new_application", "Yangi ariza", "Sizning e'loningizga ariza tushdi: "+elon.Title, &models.RelatedEntity{Type: "application", ID: updated.ID})
+		h.notifyApplied(r.Context(), updated)
 		httpx.JSON(w, 201, updated)
 		return
 	}
@@ -214,8 +214,14 @@ func (h *Handler) Apply(w http.ResponseWriter, r *http.Request) {
 		httpx.Err(w, err)
 		return
 	}
-	h.Notify.Push(r.Context(), elon.OwnerID, "new_application", "Yangi ariza", "Sizning e'loningizga ariza tushdi: "+elon.Title, &models.RelatedEntity{Type: "application", ID: app.ID})
+	h.notifyApplied(r.Context(), app)
 	httpx.JSON(w, 201, app)
+}
+
+func (h *Handler) notifyApplied(ctx context.Context, app models.Application) {
+	related := &models.RelatedEntity{Type: "application", ID: app.ID}
+	h.Notify.Push(ctx, app.EmployerID, "new_application", "Yangi ariza", "Sizning e'loningizga ariza tushdi: "+app.ElonTitle, related)
+	h.Notify.Push(ctx, app.WorkerID, "application_submitted", "Arizangiz yuborildi", "Ish beruvchining javobini kuting: "+app.ElonTitle, related)
 }
 
 func (h *Handler) Accept(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +319,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request, decision string
 			res, err := h.Elons.UpdateOne(r.Context(), filledListingFilter(elon.ID), bson.M{"$set": bson.M{"status": "filled"}})
 			filled = err == nil && res.ModifiedCount == 1
 		}
-		h.Notify.Push(r.Context(), app.WorkerID, "application_accepted", "Arizangiz qabul qilindi", elon.Title, &models.RelatedEntity{Type: "application", ID: appID})
+		h.notifyAccepted(r.Context(), app, elon)
 
 		// Joy to'lgach: shu e'londagi qolgan kutilayotgan arizalarni avtomatik
 		// rad etamiz va har biriga "joy to'ldi" xabarini yuboramiz.
@@ -539,7 +545,11 @@ func pageOpts(r *http.Request, defaultLimit, maxLimit int) *options.FindOptions 
 // MyApplications: applications I made as worker.
 func (h *Handler) MyApplications(w http.ResponseWriter, r *http.Request) {
 	uid, _ := primitive.ObjectIDFromHex(httpx.UserID(r))
-	cur, err := h.Apps.Find(r.Context(), bson.M{"workerId": uid}, pageOpts(r, 100, 200))
+	filter := bson.M{"workerId": uid}
+	if !applicationStatusFilter(w, r, filter) {
+		return
+	}
+	cur, err := h.Apps.Find(r.Context(), filter, pageOpts(r, 100, 200))
 	if err != nil {
 		httpx.Err(w, err)
 		return
@@ -563,6 +573,9 @@ func (h *Handler) MyElonsApplications(w http.ResponseWriter, r *http.Request) {
 	// hisob esa (o'zi ish beruvchi bo'lganda) ularni ko'radi, shuning uchun
 	// reviewer nomzodlar ro'yxati oqimini ham sinay oladi.
 	filter := bson.M{"employerId": uid}
+	if !applicationStatusFilter(w, r, filter) {
+		return
+	}
 	if !httpx.IsReviewActor(r.Context()) {
 		filter["isReviewData"] = bson.M{"$ne": true}
 	}

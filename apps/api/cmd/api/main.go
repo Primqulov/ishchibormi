@@ -21,9 +21,11 @@ import (
 	"github.com/ishchibormi/backend/internal/application"
 	"github.com/ishchibormi/backend/internal/auth"
 	"github.com/ishchibormi/backend/internal/category"
+	"github.com/ishchibormi/backend/internal/channelpost"
 	"github.com/ishchibormi/backend/internal/elon"
 	"github.com/ishchibormi/backend/internal/errlog"
 	"github.com/ishchibormi/backend/internal/feedback"
+	"github.com/ishchibormi/backend/internal/jobalert"
 	"github.com/ishchibormi/backend/internal/moderation"
 	"github.com/ishchibormi/backend/internal/notification"
 	"github.com/ishchibormi/backend/internal/push"
@@ -94,9 +96,16 @@ func main() {
 
 	// services
 	notif := notification.New(mdb)
+	if tg := tgsend.New(cfg.TelegramBotToken); tg.Configured() {
+		telegram := notification.NewTelegram(mdb, tg, log)
+		telegram.WebBaseURL = cfg.WebBaseURL
+		notif.AttachTelegram(telegram)
+		go telegram.Run(ctx)
+		log.Info("telegram job notifications ready")
+	}
 
-	// Mobil push (FCM). Credentials berilmasa jimgina o'chiq — API to'liq
-	// ishlayveradi, bildirishnomalar faqat in-app (polling) bo'lib qoladi.
+	// Mobil push (FCM). Credentials berilmasa API va Telegram bildirishnomalari
+	// ishlayveradi; ilova bildirishnomalarni polling orqali oladi.
 	// Ulanish nuqtasi: notification.Service.Push ichidagi Pusher chaqiruvi —
 	// har bir in-app notification (ariza, qabul, rad, broadcast) shu yerdan
 	// o'tadi, shuning uchun alohida "push yuborish" kodi hech qayerda kerak emas.
@@ -194,10 +203,23 @@ func main() {
 	accountH := account.NewHandler(cfg, mdb, s3svc)
 	catH := category.NewHandler(mdb)
 	elonH := elon.NewHandler(mdb, s3svc, notif)
+	channelPublisher, channelErr := channelpost.New(mdb, tgsend.New(cfg.TelegramBotToken), cfg.TelegramJobsChannelID, cfg.TelegramBotUsername, log)
+	if channelErr != nil {
+		log.Warn("channel publication disabled", "reason", channelErr.Error())
+	} else if channelPublisher != nil {
+		elonH.Channel = channelPublisher
+		go channelPublisher.Run(ctx)
+		log.Info("channel publication worker ready")
+	}
 	// Moderatsiyani e'lon yaratish oqimiga ulaymiz. MODERATION_ELON_ENFORCE
 	// o'chiq (standart) bo'lsa bu chaqiruv POST /api/elons xatti-harakatini
 	// o'zgartirmaydi — moderatsiya faqat /api/moderation/* orqali ishlaydi.
 	elonH.AttachModerator(modGuard, cfg.ModerationMaxImageBytes)
+	// Ish signali: foydalanuvchi belgilagan hududda yangi e'lon chiqqanda
+	// xabar beradi. Yetkazish odatdagi bildirishnoma quvuri orqali ketadi,
+	// shuning uchun bu yerda alohida worker yo'q.
+	alertH := jobalert.New(mdb, notif, log)
+	elonH.Alerts = alertH
 	appH := application.NewHandler(mdb, notif)
 	repH := report.NewHandler(mdb)
 	fbH := feedback.NewHandler(mdb)
@@ -310,7 +332,7 @@ func main() {
 		// X-Client-Platform — brauzer klienti o'zini tanitadi (httpx.
 		// ClientPlatformHeader). Standart bo'lmagan sarlavha, ya'ni ruxsat
 		// berilmasa brauzer preflight'da so'rovni butunlay to'xtatadi.
-		AllowedHeaders: []string{"Authorization", "Content-Type", httpx.ClientPlatformHeader},
+		AllowedHeaders: []string{"Authorization", "Content-Type", "Idempotency-Key", httpx.ClientPlatformHeader},
 		MaxAge:         300,
 	}))
 
@@ -330,6 +352,7 @@ func main() {
 	// Profilni saqlash odatda kamdan-kam bo'ladi (onboarding + vaqti-vaqti
 	// bilan tahrir), lekin endi u ham tashqi tekshiruv chaqiradi.
 	profileLimiter := httpx.NewLimiter(15, 0.1)   // 15 burst, then 1 / 10s
+	alertLimiter := httpx.NewLimiter(15, 0.1)     // 15 burst, keyin 1 / 10s — signal sozlash
 	publicReadLimiter := httpx.NewLimiter(120, 5) // generous public-query budget per client IP
 	// Authenticated writes that leave permanent, publicly visible or
 	// admin-facing residue. Keyed by user id, not IP: the point is to bound what
@@ -480,6 +503,8 @@ func main() {
 		})
 
 		// Public auth
+		r.Post("/auth/bot/session", authH.BotSession)
+		r.With(otpLimiter.Middleware("miniapp-auth")).Post("/auth/miniapp/session", authH.MiniAppSession)
 		r.Group(func(r chi.Router) {
 			r.Use(otpLimiter.Middleware("otp"))
 			r.Post("/auth/otp/request", authH.RequestOTP)
@@ -500,6 +525,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(httpx.OptionalUserAuth(cfg.JWTAccessSecret, reviewUserID))
 			r.With(publicReadLimiter.Middleware("public-read")).Get("/elons", elonH.Feed)
+			r.With(publicReadLimiter.Middleware("public-read")).Get("/elons/nearby", elonH.Nearby)
 			r.With(publicReadLimiter.Middleware("public-read")).Get("/elons/{id}", elonH.Get)
 		})
 		r.Get("/elons/sitemap", elonH.Sitemap) // XML sitemap uchun yengil ro'yxat
@@ -553,7 +579,7 @@ func main() {
 			// Turkumlarni faqat tizim/admin belgilaydi — oddiy foydalanuvchi
 			// yangi turkum qo'sha olmaydi (turkumlar oldindan beriladi).
 
-			r.With(elonLimiter.MiddlewareKey("elon-create", httpx.UserID)).Post("/elons", elonH.Create)
+			r.With(elonLimiter.MiddlewareKey("elon-create", httpx.UserID), elon.BotPublicationSource(cfg.BotSharedSecret)).Post("/elons", elonH.Create)
 			r.Patch("/elons/{id}", elonH.Update)
 			r.Delete("/elons/{id}", elonH.Delete)
 			r.Post("/elons/{id}/cancel", elonH.Cancel)
@@ -563,6 +589,7 @@ func main() {
 				r.Use(applyLimiter.Middleware("apply"))
 				r.Post("/elons/{id}/apply", appH.Apply)
 			})
+			r.Get("/applications/{id}", appH.Get)
 			r.Post("/applications/{id}/accept", appH.Accept)
 			r.Post("/applications/{id}/reject", appH.Reject)
 			r.Post("/applications/{id}/cancel", appH.Cancel)
@@ -575,6 +602,12 @@ func main() {
 			r.Get("/notifications", notif.List)
 			r.Post("/notifications/read-all", notif.ReadAll)
 			r.Post("/notifications/read", notif.Read)
+
+			// Ish signali. O'qish arzon — cheklov faqat yozuvda, chunki har
+			// saqlash hududni qayta indekslanadigan yozuvga aylantiradi.
+			r.Get("/job-alerts", alertH.Get)
+			r.With(alertLimiter.MiddlewareKey("job-alert", httpx.UserID)).Put("/job-alerts", alertH.Save)
+			r.With(alertLimiter.MiddlewareKey("job-alert", httpx.UserID)).Delete("/job-alerts", alertH.Delete)
 
 			// Shikoyat admin moderatsiya navbatiga tushadi — demo hisob real
 			// odam haqida shikoyat yubora olmasligi kerak.

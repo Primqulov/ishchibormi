@@ -55,8 +55,10 @@ type Config struct {
 	OTPTTL          time.Duration
 	OTPDevReturn    bool
 
-	TelegramBotToken    string
-	TelegramBotUsername string
+	TelegramBotToken      string
+	TelegramBotUsername   string
+	TelegramJobsChannelID string // Empty disables automatic channel publication.
+	WebBaseURL            string // Public website origin used in Telegram links.
 
 	// ErrorAlertChatID — "3.12 · Xatoliklar" ning Kritik/Yuqori
 	// ogohlantirishlari yuboriladigan Telegram chat (#dev-alerts).
@@ -275,7 +277,7 @@ func Load() Config {
 		JWTRefreshTTL: time.Duration(envInt("JWT_REFRESH_TTL_HRS", 720)) * time.Hour,
 		// 72 soat = 3 kun.
 		AdminIdleTTL:    time.Duration(envInt("ADMIN_IDLE_TTL_HOURS", 72)) * time.Hour,
-		CORSOrigins:     envList("CORS_ORIGINS", "http://localhost:3000"),
+		CORSOrigins:     envList("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"),
 		AdminSeedUser:   envStr("ADMIN_SEED_USER", "admin"),
 		AdminSeedPass:   envStr("ADMIN_SEED_PASS", "Admin123!"),
 		BotSharedSecret: envStr("BOT_SHARED_SECRET", "dev-shared"),
@@ -283,10 +285,12 @@ func Load() Config {
 		OTPTTL:          time.Duration(envInt("OTP_TTL_SECONDS", 180)) * time.Second,
 		// Defaults to false: returning OTP codes over the API is a dev-only
 		// convenience and a credential leak in production.
-		OTPDevReturn:        envBool("OTP_DEV_RETURN", false),
-		TelegramBotToken:    envStr("TELEGRAM_BOT_TOKEN", ""),
-		TelegramBotUsername: envStr("TELEGRAM_BOT_USERNAME", ""),
-		ErrorAlertChatID:    int64(envInt("ERROR_ALERT_CHAT_ID", 0)),
+		OTPDevReturn:          envBool("OTP_DEV_RETURN", false),
+		TelegramBotToken:      envStr("TELEGRAM_BOT_TOKEN", ""),
+		TelegramBotUsername:   envStr("TELEGRAM_BOT_USERNAME", ""),
+		TelegramJobsChannelID: strings.TrimSpace(envStr("TELEGRAM_JOBS_CHANNEL_ID", "")),
+		WebBaseURL:            strings.TrimRight(strings.TrimSpace(envStr("WEB_BASE_URL", "https://ishchibormi.uz")), "/"),
+		ErrorAlertChatID:      int64(envInt("ERROR_ALERT_CHAT_ID", 0)),
 
 		FCMCredentialsFile: envStr("FCM_CREDENTIALS_FILE", ""),
 
@@ -402,6 +406,9 @@ func (c Config) mustValidate() {
 	// it is a security switch, and a dev/staging box is often reachable too.
 	// With the switch off (the default) none of these can fire.
 	problems := c.reviewLoginProblems()
+	if problem := webBaseURLProblem(c.WebBaseURL, c.IsProd()); problem != "" {
+		log.Fatal(problem)
+	}
 
 	if !c.IsProd() {
 		if len(problems) > 0 {
