@@ -136,7 +136,13 @@ func (c *Client) SendChannelLocation(ctx context.Context, channelID int64, lat, 
 //
 // Har bir tugma ALOHIDA qatorda: kanal posti telefonda o'qiladi va yonma-yon
 // turgan uzun yorliqlar qirqilib ketardi.
-func (c *Client) SendChannelHTML(ctx context.Context, channelID int64, text string, buttons []Button) (int64, error) {
+// replyTo > 0 bo'lsa xabar o'sha xabarga JAVOB qilib yuboriladi: kanalda
+// matn xarita kartasiga bog'langan holda, uning iqtibosi bilan chiqadi.
+//
+// allow_sending_without_reply ATAYLAB true: karta qandaydir sabab bilan
+// o'chirilgan bo'lsa (masalan admin tozalagan), matn baribir yuborilishi
+// kerak — aks holda e'lon kanalga umuman tushmay qolardi.
+func (c *Client) SendChannelHTML(ctx context.Context, channelID int64, text string, buttons []Button, replyTo int64) (int64, error) {
 	if channelID >= 0 || len(buttons) == 0 || strings.TrimSpace(text) == "" {
 		return 0, &APIError{Code: 400, Reason: "invalid_channel_post"}
 	}
@@ -148,13 +154,15 @@ func (c *Client) SendChannelHTML(ctx context.Context, channelID int64, text stri
 		rows = append(rows, []inlineButton{{Text: b.Text, URL: b.URL}})
 	}
 	payload := struct {
-		ChatID    int64          `json:"chat_id"`
-		Text      string         `json:"text"`
-		ParseMode string         `json:"parse_mode"`
-		Silent    bool           `json:"disable_notification"`
-		NoPreview bool           `json:"disable_web_page_preview"`
-		Markup    inlineKeyboard `json:"reply_markup"`
-	}{channelID, text, "HTML", true, true, inlineKeyboard{InlineKeyboard: rows}}
+		ChatID      int64          `json:"chat_id"`
+		Text        string         `json:"text"`
+		ParseMode   string         `json:"parse_mode"`
+		Silent      bool           `json:"disable_notification"`
+		NoPreview   bool           `json:"disable_web_page_preview"`
+		ReplyTo     int64          `json:"reply_to_message_id,omitempty"`
+		ReplyAnyway bool           `json:"allow_sending_without_reply,omitempty"`
+		Markup      inlineKeyboard `json:"reply_markup"`
+	}{channelID, text, "HTML", true, true, replyTo, replyTo > 0, inlineKeyboard{InlineKeyboard: rows}}
 	var result struct {
 		MessageID int64 `json:"message_id"`
 	}

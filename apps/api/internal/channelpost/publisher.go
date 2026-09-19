@@ -30,7 +30,7 @@ type Sender interface {
 	BotUsername(context.Context) (string, error)
 	ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error)
 	SendChannelLocation(context.Context, int64, float64, float64) (int64, error)
-	SendChannelHTML(context.Context, int64, string, []tgsend.Button) (int64, error)
+	SendChannelHTML(context.Context, int64, string, []tgsend.Button, int64) (int64, error)
 }
 
 // Bitta tsiklda yuboriladigan post soni. Telegram umumiy chegarasi sekundiga
@@ -316,7 +316,9 @@ func (p *Publisher) deliverNext(parent context.Context) (bool, error) {
 		}
 		claimed.MapMessageID = mapID
 	}
-	id, err := p.sender.SendChannelHTML(ctx, claimed.ChatID, post.Text, post.Buttons)
+	// Matn kartaga JAVOB qilib yuboriladi — kanalda ikkalasi bog'langan
+	// holda ko'rinadi. Karta bo'lmasa (koordinatasiz e'lon) oddiy post.
+	id, err := p.sender.SendChannelHTML(ctx, claimed.ChatID, post.Text, post.Buttons, claimed.MapMessageID)
 	if err == nil && id > 0 {
 		p.channelDelivered(ctx, claimed.ChatID)
 		return true, p.finish(ctx, claimed, "sent", "", id)

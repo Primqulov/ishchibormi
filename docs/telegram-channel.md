@@ -27,6 +27,12 @@ urinish kartani ikkinchi marta chiqarmaydi. Karta yuborilmasa matn ham
 ketmaydi: yarim post kartasiz tafsilot yoki tafsilotsiz karta bo'lib
 qolardi.
 
+Matn kartaga **javob** (`reply_to_message_id`) qilib yuboriladi — kanalda
+ikkalasi bog'langan holda, kartaning iqtibosi bilan ko'rinadi.
+`allow_sending_without_reply` ataylab yoqilgan: karta qandaydir sabab bilan
+o'chirilgan bo'lsa matn baribir chiqadi, aks holda e'lon kanalga umuman
+tushmay qolardi.
+
 Koordinatasi yo'q yoki buzuq e'lon (eski yozuv) faqat matn posti bo'ladi.
 
 Aloqa telefoni, to'liq tavsif, aniq manzil matni va ish beruvchi haqidagi

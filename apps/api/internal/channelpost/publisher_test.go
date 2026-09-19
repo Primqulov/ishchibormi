@@ -33,6 +33,7 @@ type fakeSender struct {
 	maps                int
 	mapErr              error
 	mapLat, mapLng      float64
+	replyTo             int64
 }
 
 func (f *fakeSender) Configured() bool { return !f.off }
@@ -55,13 +56,13 @@ func (f *fakeSender) SendChannelLocation(_ context.Context, id int64, lat, lng f
 	f.maps++
 	return 77, nil
 }
-func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b []tgsend.Button) (int64, error) {
+func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b []tgsend.Button, replyTo int64) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if id >= 0 {
 		panic("private destination")
 	}
-	f.text, f.buttons = text, b
+	f.text, f.buttons, f.replyTo = text, b, replyTo
 	if f.sendErr != nil {
 		// Yiqilgan urinish YUBORILGAN xabar emas: sanoq faqat kanalga
 		// haqiqatan chiqqan postlarni hisoblaydi, aks holda "takror
@@ -521,5 +522,41 @@ func TestChannelSkipsTheTextWhenTheMapCardFails(t *testing.T) {
 	// Aniq rad javobi kanalni uzadi — avvalgidek.
 	if channelStatus(t, p, testChat) != "inactive" {
 		t.Fatal("rejecting channel stayed active")
+	}
+}
+
+// Tafsilotlar xarita kartasiga JAVOB bo'lib ketadi: kanalda ikkalasi
+// bog'langan holda, karta iqtiboси bilan ko'rinadi.
+func TestChannelTextIsAttachedToTheMapCard(t *testing.T) {
+	p, f, e := testPublisher(t)
+	e.Lat, e.Lng = 41.3111, 69.2797
+	addChannel(t, p, testChat, "active")
+	insertListing(t, p, e)
+	if _, err := p.fanOutNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	drain(t, p)
+	if f.maps != 1 || f.total != 1 {
+		t.Fatalf("want one map card and one text: maps=%d text=%d", f.maps, f.total)
+	}
+	if f.replyTo != 77 {
+		t.Fatalf("text not replied to the map card: replyTo=%d", f.replyTo)
+	}
+
+	// Koordinatasiz e'lon: karta yo'q, demak javob ham yo'q.
+	plainListing := e
+	plainListing.ID = primitive.NewObjectID()
+	plainListing.Lat, plainListing.Lng = 0, 0
+	plainListing.TelegramBroadcast = p.Queued(time.Now())
+	insertListing(t, p, plainListing)
+	if _, err := p.fanOutNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	drain(t, p)
+	if f.maps != 1 {
+		t.Fatalf("map card sent for a listing without coordinates: %d", f.maps)
+	}
+	if f.replyTo != 0 {
+		t.Fatalf("plain post replied to something: %d", f.replyTo)
 	}
 }

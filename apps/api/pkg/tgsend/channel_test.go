@@ -67,6 +67,11 @@ func TestChannelTransportResolvesRightsAndSendsOnlySilentChannelPost(t *testing.
 					if payload["chat_id"] != float64(-1001234567890) || payload["disable_notification"] != true || payload["disable_web_page_preview"] != true || payload["parse_mode"] != "HTML" {
 						t.Fatal("incorrect channel message")
 					}
+					// Matn xarita kartasiga JAVOB bo'lib ketadi, karta
+					// o'chirilgan bo'lsa ham yuborilishi kerak.
+					if payload["reply_to_message_id"] != float64(12) || payload["allow_sending_without_reply"] != true {
+						t.Fatalf("text is not attached to the map card: %v", payload)
+					}
 					if payload["from_chat_id"] != nil {
 						t.Fatal("private message forwarded")
 					}
@@ -92,7 +97,7 @@ func TestChannelTransportResolvesRightsAndSendsOnlySilentChannelPost(t *testing.
 				t.Fatal("map card failed", err)
 			}
 			id, err := c.SendChannelHTML(context.Background(), info.ID, "<b>Ish</b>",
-				[]Button{{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"}})
+				[]Button{{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"}}, 12)
 			if err != nil || id != 12 || !sent {
 				t.Fatal("send failed", err)
 			}
@@ -106,7 +111,7 @@ func TestChannelTransportNeverLeaksTokenOrAcceptsPrivateTarget(t *testing.T) {
 		calls++
 		return nil, errors.New("transport " + r.URL.String())
 	})
-	_, err := c.SendChannelHTML(context.Background(), 123, "message", []Button{{Text: "Open", URL: "https://t.me/testbot"}})
+	_, err := c.SendChannelHTML(context.Background(), 123, "message", []Button{{Text: "Open", URL: "https://t.me/testbot"}}, 0)
 	if err == nil || calls != 0 {
 		t.Fatal("private target sent")
 	}
