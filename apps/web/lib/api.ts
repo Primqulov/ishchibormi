@@ -349,15 +349,18 @@ export type ID = string;
  * Backend biladigan klientlar (Go: httpx.Platform*). Ro'yxat YOPIQ —
  * backend klient yuborgan qiymatni shu to'plamga keltiradi.
  */
-export type ClientPlatform = "web" | "android" | "ios" | "unknown";
+export type ClientPlatform = "web" | "android" | "ios" | "telegram" | "unknown";
 
 /** Panelda ko'rsatiladigan tartib — hisobotlarda ham shu ketma-ketlik. */
-export const CLIENT_PLATFORMS: ClientPlatform[] = ["web", "android", "ios", "unknown"];
+export const CLIENT_PLATFORMS: ClientPlatform[] = ["web", "android", "ios", "telegram", "unknown"];
 
 const PLATFORM_LABELS: Record<ClientPlatform, string> = {
   web: "Veb",
   android: "Android",
   ios: "iOS",
+  // Bot suhbati va Mini App. Saytdan ham, ilovadan ham alohida kanal:
+  // bu odamlar ikkalasiga ham kirmagan bo'lishi mumkin.
+  telegram: "Telegram",
   // "Noma'lum" — bu funksiyadan oldin ro'yxatdan o'tganlar va sarlavha
   // yubormaydigan eski ilova versiyalari. Ataylab ko'rsatiladi: yashirilsa
   // ustunlar yig'indisi jami foydalanuvchiga teng kelmasdi.
@@ -401,15 +404,21 @@ const DEVICE_SUFFIXES: Partial<Record<ClientDevice, string>> = {
 /**
  * Platforma kodini panelda ko'rsatiladigan nomga aylantiradi.
  *
- * Ikkinchi argument berilsa, VEB uchun qurilma ham qo'shiladi:
- * "Veb Android", "Veb iOS". Boshqa platformalarda qurilma ATAYLAB
- * e'tiborsiz qoldiriladi — mobil ilovada platformaning o'zi qurilma OS'i,
- * ya'ni "Android Android" bo'lib chiqardi. Bazadagi eskirgan `lastDevice`
- * (foydalanuvchi vebdan ilovaga o'tgan holat) ham shu tufayli zararsiz.
+ * Ikkinchi argument berilsa, VEB va TELEGRAM uchun qurilma ham qo'shiladi:
+ * "Veb Android", "Veb iOS", "Telegram iOS". Ikkalasida ham platformaning
+ * o'zi qurilma haqida hech nima demaydi — Mini App haqiqiy brauzer
+ * freymida ochiladi, ya'ni OS aniqlanadi.
+ *
+ * Mobil ilovada qurilma ATAYLAB e'tiborsiz qoldiriladi: u yerda
+ * platformaning o'zi qurilma OS'i, ya'ni "Android Android" bo'lib
+ * chiqardi. Bazadagi eskirgan `lastDevice` (foydalanuvchi vebdan ilovaga
+ * o'tgan holat) ham shu tufayli zararsiz.
  */
+const DEVICE_AWARE_PLATFORMS = new Set(["web", "telegram"]);
+
 export function platformLabel(p?: string | null, device?: string | null): string {
   const nomi = PLATFORM_LABELS[(p || "unknown") as ClientPlatform] ?? p ?? "Noma'lum";
-  if (p !== "web") return nomi;
+  if (!DEVICE_AWARE_PLATFORMS.has(p || "")) return nomi;
   const qoshimcha = DEVICE_SUFFIXES[(device || "") as ClientDevice];
   return qoshimcha ? `${nomi} ${qoshimcha}` : nomi;
 }
@@ -1103,6 +1112,7 @@ export interface DashboardStats {
   webUsers: number;
   androidUsers: number;
   iosUsers: number;
+  telegramUsers: number;
   unknownPlatformUsers: number;
 }
 

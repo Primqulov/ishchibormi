@@ -105,6 +105,7 @@ const PLATFORMA_RANGI: Record<string, string> = {
   web: KO_K,
   android: YASHIL,
   ios: IK,
+  telegram: ORANJ,
   unknown: OCH_KUL,
 };
 
@@ -254,7 +255,8 @@ export default function AdminDashboard() {
           <Karta label="Veb" value={kpi?.webUsers} loading={yuklanmoqda} delay={1.15} anim="plat" tone="brand" />
           <Karta label="Android" value={kpi?.androidUsers} loading={yuklanmoqda} delay={1.23} anim="plat" tone="success" />
           <Karta label="iOS" value={kpi?.iosUsers} loading={yuklanmoqda} delay={1.31} anim="plat" />
-          <Karta label="Noma'lum" value={kpi?.unknownPlatformUsers} loading={yuklanmoqda} delay={1.39} anim="plat" />
+          <Karta label="Telegram" value={kpi?.telegramUsers} loading={yuklanmoqda} delay={1.39} anim="plat" />
+          <Karta label="Noma'lum" value={kpi?.unknownPlatformUsers} loading={yuklanmoqda} delay={1.47} anim="plat" />
         </div>
         <p className="ib-anim ib-anim-fade text-xs" style={{ color: OCH_KUL, animationDelay: "1.10s" }}>
           Oxirgi ishlatilgan klient bo&apos;yicha. &quot;Noma&apos;lum&quot; — bu hisob

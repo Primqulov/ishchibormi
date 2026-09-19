@@ -49,7 +49,10 @@ async function proxy(request: NextRequest, context: { params: { path: string[] }
       target = new URL(image.pathname, api);
     } catch { return failure(404, "Rasm topilmadi."); }
   }
-  const headers = new Headers({ "X-Client-Platform": "web" });
+  // Mini App Telegram ichida ochiladi, oddiy saytda emas: admin panelida
+  // bu foydalanuvchilar "Telegram" ustunida ko'rinishi kerak. Qurilma OS'i
+  // baribir aniqlanadi (UA freymda haqiqiy brauzerniki) -> "Telegram iOS".
+  const headers = new Headers({ "X-Client-Platform": "telegram" });
   for (const name of ["authorization", "content-type", "idempotency-key", "user-agent"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);

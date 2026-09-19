@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ishchibormi/backend/pkg/httpx"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -102,13 +103,16 @@ func TestPlatformCountsAlwaysListsEveryPlatform(t *testing.T) {
 	}
 
 	signup := platformCounts(ctx, users, "signupPlatform", nil)
-	// iOS'dan hech kim ro'yxatdan o'tmagan, lekin ustun BARIBIR bo'lishi
-	// kerak — yo'qolgan ustun "ma'lumot kelmadi" bo'lib o'qiladi.
-	if len(signup) != 4 {
-		t.Fatalf("signup %d ta qator, 4 kutilgan: %v", len(signup), signup)
+	// Hech kim ishlatmagan platforma ham ustun sifatida BARIBIR bo'lishi
+	// kerak — yo'qolgan ustun "ma'lumot kelmadi" bo'lib o'qiladi. Kutilgan
+	// son ATAYLAB qotirilmagan: yangi platforma qo'shilganda test emas,
+	// httpx.Platforms yagona manba bo'lib qolsin.
+	wantRows := len(httpx.Platforms) + 1 // + "noma'lum"
+	if len(signup) != wantRows {
+		t.Fatalf("signup %d ta qator, %d kutilgan: %v", len(signup), wantRows, signup)
 	}
 	got := as(signup)
-	for name, want := range map[string]int{"web": 2, "android": 1, "ios": 0, "unknown": 1} {
+	for name, want := range map[string]int{"web": 2, "android": 1, "ios": 0, "telegram": 0, "unknown": 1} {
 		if got[name] != want {
 			t.Errorf("signup[%s] = %d, want %d (hammasi: %v)", name, got[name], want, got)
 		}

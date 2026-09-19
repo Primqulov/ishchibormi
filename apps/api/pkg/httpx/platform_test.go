@@ -24,6 +24,7 @@ func TestClientPlatformFromHeader(t *testing.T) {
 		{"web", "web", PlatformWeb},
 		{"android", "android", PlatformAndroid},
 		{"ios", "ios", PlatformIOS},
+		{"telegram", "telegram", PlatformTelegram},
 		// Klient noto'g'ri registr yoki ortiqcha bo'shliq yuborsa ham bitta
 		// guruhga tushishi kerak — aks holda hisobotda takroriy ustun paydo
 		// bo'lardi.
@@ -155,6 +156,23 @@ func TestClientDevice(t *testing.T) {
 		},
 		{"ios ilovasi", "ios", "Dart/3.11 (dart:io)", ""},
 
+		// TELEGRAM: platformaning o'zi qurilma haqida hech nima demaydi,
+		// shuning uchun veb kabi OS aniqlanadi -> panelda "Telegram iOS".
+		{
+			"mini app iphone", "telegram",
+			"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15",
+			DeviceIOS,
+		},
+		{
+			"mini app android", "telegram",
+			"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36",
+			DeviceAndroid,
+		},
+		// Chatdagi bot suhbati: so'rov Go klientidan keladi, brauzer UA'si
+		// yo'q. Qurilma bo'sh qolishi TO'G'RI javob — taxmin qilinmaydi.
+		{"bot suhbati (Go klienti)", "telegram", "Go-http-client/2.0", ""},
+		{"bot suhbati, UA yo'q", "telegram", "", ""},
+
 		// Klient umuman tanitmagan — platforma ham bo'sh, qurilma ham.
 		{"noma'lum klient", "", "Dart/3.11 (dart:io)", ""},
 
@@ -172,6 +190,23 @@ func TestClientDevice(t *testing.T) {
 				t.Fatalf("ClientDevice(%q, %q) = %q, kutilgan %q", c.header, c.ua, got, c.want)
 			}
 		})
+	}
+}
+
+// Hisobotlar httpx.Platforms bo'ylab yuriladi: ro'yxatdan tushib qolgan
+// platforma admin panelida umuman ko'rinmaydi va "noma'lum" ga qo'shilib
+// ketadi. Shuning uchun har bir qiymat shu ro'yxatda bo'lishi shart.
+func TestEveryKnownPlatformIsReported(t *testing.T) {
+	for _, want := range []string{PlatformWeb, PlatformAndroid, PlatformIOS, PlatformTelegram} {
+		found := false
+		for _, p := range Platforms {
+			if p == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("%q hisobot ro'yxatida yo'q", want)
+		}
 	}
 }
 

@@ -63,7 +63,7 @@ func usersFilter(q url.Values) bson.M {
 	// yubormaydigan eski klientlarni ataylab ko'rib chiqish kerak bo'lishi
 	// mumkin (masalan, ilovaning eski versiyasi qancha qolganini bilish).
 	switch p := q.Get("platform"); p {
-	case httpx.PlatformWeb, httpx.PlatformAndroid, httpx.PlatformIOS:
+	case httpx.PlatformWeb, httpx.PlatformAndroid, httpx.PlatformIOS, httpx.PlatformTelegram:
 		filter["lastPlatform"] = p
 	case httpx.PlatformUnknown:
 		filter["lastPlatform"] = bson.M{"$in": bson.A{nil, ""}}

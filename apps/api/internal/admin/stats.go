@@ -111,6 +111,9 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		"webUsers":     count(h.Users, merge(notDeleted, bson.M{"lastPlatform": "web"})),
 		"androidUsers": count(h.Users, merge(notDeleted, bson.M{"lastPlatform": "android"})),
 		"iosUsers":     count(h.Users, merge(notDeleted, bson.M{"lastPlatform": "ios"})),
+		// Telegram — bot suhbati va Mini App. Bu odamlar saytga ham,
+		// ilovaga ham kirmagan bo'lishi mumkin, shuning uchun alohida ustun.
+		"telegramUsers": count(h.Users, merge(notDeleted, bson.M{"lastPlatform": "telegram"})),
 		// Sarlavha yubormaydigan eski klientlar va bu funksiyadan oldin
 		// ro'yxatdan o'tganlar. ATAYLAB ko'rsatiladi: yashirilsa ustunlar
 		// yig'indisi jami foydalanuvchiga teng kelmay, sanoq buzuqdek

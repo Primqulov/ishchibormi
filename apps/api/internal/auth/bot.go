@@ -83,7 +83,10 @@ func (h *Handler) telegramSession(w http.ResponseWriter, r *http.Request, telegr
 		return
 	}
 	if u.ID.IsZero() || !u.IsPhoneVerified {
-		user, err := h.upsertUser(ctx, phone, telegramID, "", "")
+		// Platforma bot yuborgan sarlavhadan olinadi (X-Client-Platform:
+		// telegram). Eski bot versiyasi uni yubormaydi -> bo'sh satr, ya'ni
+		// mavjud hisobning platformasi o'zgarmaydi.
+		user, err := h.upsertUser(ctx, phone, telegramID, httpx.ClientPlatform(r), httpx.ClientDevice(r))
 		if errors.Is(err, errAccountBlocked) {
 			httpx.Err(w, httpx.NewError(403, "account_blocked", "Hisobingiz bloklangan."))
 			return

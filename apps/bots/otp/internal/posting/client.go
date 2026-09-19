@@ -157,6 +157,12 @@ func (c *Client) request(ctx context.Context, method, path, token, key, contentT
 		return err
 	}
 	r.Header.Set("Content-Type", contentType)
+	// Bot o'zini tanitadi: admin panelida bu odamlar "Telegram" ustunida
+	// ko'rinadi. Usiz ular platformasi noma'lum bo'lib qolardi — bot Go
+	// klienti brauzer UA'sini yubormaydi va zaxira aniqlash ishlamaydi.
+	// Sarlavha nomi backendda httpx.ClientPlatformHeader; bot alohida
+	// modul, shuning uchun bu yerda satr sifatida yozilgan.
+	r.Header.Set("X-Client-Platform", "telegram")
 	if token != "" {
 		r.Header.Set("Authorization", "Bearer "+token)
 	}

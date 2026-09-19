@@ -17,6 +17,11 @@ const (
 	PlatformWeb     = "web"
 	PlatformAndroid = "android"
 	PlatformIOS     = "ios"
+	// PlatformTelegram — Telegram bot: chatdagi suhbat ham, Mini App ham.
+	// Ilova yoki brauzerdan ALOHIDA o'lchov: bu odamlar saytga ham,
+	// ilovaga ham kirmagan bo'lishi mumkin, ya'ni ularni "veb" ga qo'shib
+	// yuborish o'sish kanalini noto'g'ri ko'rsatardi.
+	PlatformTelegram = "telegram"
 	// PlatformUnknown — klient o'zini tanitmagan. Saqlashda BO'SH satr
 	// ishlatiladi (maydon umuman yozilmaydi), bu esa faqat ko'rsatish uchun.
 	PlatformUnknown = "unknown"
@@ -32,7 +37,7 @@ const (
 const ClientPlatformHeader = "X-Client-Platform"
 
 // Platforms — hisobotlarda ko'rsatiladigan tartib.
-var Platforms = []string{PlatformWeb, PlatformAndroid, PlatformIOS}
+var Platforms = []string{PlatformWeb, PlatformAndroid, PlatformIOS, PlatformTelegram}
 
 // ClientPlatform so'rov qaysi platformadan kelganini qaytaradi:
 // "web" | "android" | "ios", yoki aniqlab bo'lmasa BO'SH satr.
@@ -59,6 +64,8 @@ func normalizePlatform(v string) string {
 		return PlatformAndroid
 	case PlatformIOS:
 		return PlatformIOS
+	case PlatformTelegram:
+		return PlatformTelegram
 	default:
 		return ""
 	}
@@ -131,9 +138,13 @@ const (
 // bunday iPad "macos" bo'lib qoladi. UA bilan buni tuzatib bo'lmaydi va
 // noto'g'ri "ios" deb belgilashdan ko'ra kam aniq javob ma'qul.
 func ClientDevice(r *http.Request) string {
-	// Faqat veb uchun ma'noga ega: mobil ilovada platformaning o'zi
+	// Veb va Telegram uchun ma'noga ega. Mobil ilovada platformaning o'zi
 	// allaqachon qurilma OS'i ("android"/"ios"), takrorlash chalkashtirardi.
-	if ClientPlatform(r) != PlatformWeb {
+	// Telegram esa qurilma haqida hech nima demaydi: Mini App haqiqiy
+	// brauzer freymida ochiladi va UA'da OS tokeni bo'ladi ("Telegram iOS").
+	// Chatdagi bot suhbatida so'rov Go klientidan keladi, UA'da Mozilla
+	// prefiksi yo'q — u yerda qurilma bo'sh qoladi, bu to'g'ri javob.
+	if p := ClientPlatform(r); p != PlatformWeb && p != PlatformTelegram {
 		return ""
 	}
 	ua := r.UserAgent()
