@@ -294,11 +294,12 @@ ishchibormi.uz {
 	#   /api/*      — barcha REST endpoint'lar (cmd/api/main.go: r.Route("/api"))
 	#   /uploads/*  — lokal diskdagi rasmlar (S3 sozlanmagan holat)
 	#   /healthz    — monitoring
-	@api {
-		path /api/* /uploads/* /healthz
-		# Mini App proksisi Next.js'da: qolgan handle unga uzatadi.
-		not path /api/miniapp/*
-	}
+	# Mini App proksisi ATAYLAB /api/ dan TASHQARIDA (/miniapp/api/*): shunda u
+	# quyidagi @api matcher'iga tushmaydi va oxirgi handle orqali Next.js'ga
+	# o'zi boradi. Ya'ni Mini App ishlashi uchun bu faylni yangilash SHART EMAS
+	# — yangilash faqat quyidagi X-Frame-Options qoidasi uchun kerak
+	# (Telegram Web Mini App'ni iframe'da ochadi).
+	@api path /api/* /uploads/* /healthz
 	handle @api {
 		reverse_proxy 127.0.0.1:8080 {
 			# XAVFSIZLIK: Caddy standart holatda X-Forwarded-For'ga mijoz

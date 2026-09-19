@@ -10,11 +10,11 @@ export function allowedMiniAppRequest(method, rawURL) {
   if (method === "GET" || method === "HEAD") {
     if (path === "/miniapp/post" || path === "/miniapp/post/" || path === "/favicon.ico") return true;
     if (/^\/(?:_next\/static|leaflet|fonts|img)\//.test(path)) return true;
-    if (/^\/api\/miniapp\/(?:categories|me|image)$/.test(path)) return true;
+    if (/^\/miniapp\/api\/(?:categories|me|image)$/.test(path)) return true;
   }
-  if (method === "POST" && /^\/api\/miniapp\/(?:auth\/miniapp\/session|elons|uploads)$/.test(path)) return true;
-  if (method === "PATCH" && path === "/api/miniapp/me") return true;
-  if (method === "DELETE" && path === "/api/miniapp/uploads") return true;
+  if (method === "POST" && /^\/miniapp\/api\/(?:auth\/miniapp\/session|elons|uploads)$/.test(path)) return true;
+  if (method === "PATCH" && path === "/miniapp/api/me") return true;
+  if (method === "DELETE" && path === "/miniapp/api/uploads") return true;
   return false;
 }
 

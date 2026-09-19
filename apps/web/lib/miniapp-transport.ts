@@ -7,14 +7,14 @@ export function isTransientMiniAppStatus(status: number) {
 
 function canRetry(url: string, init: RequestInit) {
   const path = new URL(url, "https://miniapp.invalid").pathname;
-  if (!path.startsWith("/api/miniapp/")) return false;
+  if (!path.startsWith("/miniapp/api/")) return false;
   const method = (init.method || "GET").toUpperCase();
   if (method === "GET") return true;
   if (method !== "POST" || typeof init.body !== "string") return false;
-  if (path === "/api/miniapp/auth/miniapp/session") return true;
+  if (path === "/miniapp/api/auth/miniapp/session") return true;
   // The API deduplicates listing writes using this exact key and owner.
   // Uploads and other writes cannot safely be replayed after a lost response.
-  return path === "/api/miniapp/elons" && /^[a-f\d]{24}$/i.test(new Headers(init.headers).get("Idempotency-Key") || "");
+  return path === "/miniapp/api/elons" && /^[a-f\d]{24}$/i.test(new Headers(init.headers).get("Idempotency-Key") || "");
 }
 
 function delay(ms: number, signal?: AbortSignal | null) {

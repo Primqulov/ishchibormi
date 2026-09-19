@@ -10,7 +10,7 @@ const post = {
 
 test("a disconnected tunnel recovers and preserves the listing's body and key", async () => {
   const requests = [], waits = [];
-  const result = await fetchMiniApp("/api/miniapp/elons", post, {
+  const result = await fetchMiniApp("/miniapp/api/elons", post, {
     fetcher: async (url, init) => {
       requests.push({ url, body: init.body, key: new Headers(init.headers).get("idempotency-key") });
       if (requests.length === 1) return new Response("error code: 1033", { status: 530 });
@@ -28,7 +28,7 @@ test("a disconnected tunnel recovers and preserves the listing's body and key", 
 
 test("lost success responses can recover the same listing", async () => {
   const saved = new Map(); let calls = 0;
-  const result = await fetchMiniApp("/api/miniapp/elons", post, {
+  const result = await fetchMiniApp("/miniapp/api/elons", post, {
     fetcher: async (_url, init) => {
       calls++;
       const key = new Headers(init.headers).get("idempotency-key");
@@ -44,7 +44,7 @@ test("lost success responses can recover the same listing", async () => {
 
 test("retries stop after four attempts and preserve the final response", async () => {
   let calls = 0;
-  const result = await fetchMiniApp("/api/miniapp/categories", {}, {
+  const result = await fetchMiniApp("/miniapp/api/categories", {}, {
     fetcher: async () => { calls++; return new Response("unavailable", { status: 503 }); }, wait: async () => {},
   });
   assert.equal(calls, 4);
@@ -55,7 +55,7 @@ test("retries stop after four attempts and preserve the final response", async (
 test("validation, authentication and moderation errors are not retried", async () => {
   for (const status of [400, 401, 403, 409, 422, 429, 500]) {
     let calls = 0;
-    await fetchMiniApp("/api/miniapp/elons", post, {
+    await fetchMiniApp("/miniapp/api/elons", post, {
       fetcher: async () => { calls++; return new Response("rejected", { status }); },
       wait: async () => assert.fail("must not retry"),
     });
@@ -65,8 +65,8 @@ test("validation, authentication and moderation errors are not retried", async (
 
 test("uploads, profile updates and unkeyed writes are never replayed", async () => {
   for (const [url, init] of [
-    ["/api/miniapp/uploads", post], ["/api/miniapp/me", { ...post, method: "PATCH" }],
-    ["/api/miniapp/elons", { ...post, headers: {} }], ["/api/elons", post],
+    ["/miniapp/api/uploads", post], ["/miniapp/api/me", { ...post, method: "PATCH" }],
+    ["/miniapp/api/elons", { ...post, headers: {} }], ["/api/elons", post],
   ]) {
     let calls = 0;
     await assert.rejects(fetchMiniApp(url, init, {
@@ -79,13 +79,13 @@ test("uploads, profile updates and unkeyed writes are never replayed", async () 
 
 test("session initialization can recover and cancellation stops retrying", async () => {
   let calls = 0;
-  await fetchMiniApp("/api/miniapp/auth/miniapp/session", { method: "POST", body: "{}" }, {
+  await fetchMiniApp("/miniapp/api/auth/miniapp/session", { method: "POST", body: "{}" }, {
     fetcher: async () => { calls++; return Response.json({}, { status: calls === 1 ? 502 : 200 }); }, wait: async () => {},
   });
   assert.equal(calls, 2);
   const abort = new AbortController();
   calls = 0;
-  await assert.rejects(fetchMiniApp("/api/miniapp/elons", { ...post, signal: abort.signal }, {
+  await assert.rejects(fetchMiniApp("/miniapp/api/elons", { ...post, signal: abort.signal }, {
     fetcher: async () => { calls++; return new Response("offline", { status: 530 }); },
     wait: async () => { abort.abort(); },
   }));

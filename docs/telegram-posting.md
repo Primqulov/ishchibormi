@@ -74,7 +74,7 @@ eski tugmalar va takroriy update'lar tekshiriladi. OTP login oqimi saqlangan.
   foydalanuvchisiga mos bo'lishi va rozilik berilgan bo'lishi kerak.
 - JWT faqat Mini App'ning `sessionStorage` joyida saqlanadi, oddiy saytdagi
   hisob sessiyasiga aralashmaydi. Bot tokeni brauzerga berilmaydi.
-- Next.js `/api/miniapp/*` proksisi faqat sessiya, kategoriyalar, profil,
+- Next.js `/miniapp/api/*` proksisi faqat sessiya, kategoriyalar, profil,
   e'lon yaratish, rasmlar yuklash/o'chirish va lokal rasmni ko'rish yo'llarini
   uzatadi. Admin, OTP, debug va ixtiyoriy URL'lar proksi qilinmaydi.
 - Ish qidirish va ariza amallari botning mavjud imzolangan
@@ -102,14 +102,26 @@ Production uchun backend, frontend va bot birga yangilanadi:
 
 ```sh
 docker compose up -d --build backend frontend bot
+```
+
+Proksi `/miniapp/api/*` da, ya'ni `/api/*` dan tashqarida: reverse-proxy
+`/api/*` ni Go backendga, qolganini Next.js'ga yuborsa, Mini App uchun
+qo'shimcha marshrut qoidasi KERAK EMAS. Bu ataylab shunday — proksi yo'lini
+`/api/` ostiga qo'yish xostdagi konfigni qo'lda yangilashni talab qilardi va
+bir marta aynan shu sababdan prod'da Mini App ishlamay qolgan edi.
+
+Telegram **Web** (web.telegram.org) Mini App'ni iframe'da ochadi, shuning
+uchun u yerda ishlashi uchun xostdagi Caddy `/miniapp/*` ga
+`X-Frame-Options` qo'shmasligi kerak — Next.js `frame-ancestors` bilan faqat
+Telegram originlariga ruxsat beradi. Telegram'ning telefon ilovasi va
+Desktop versiyasi webview ishlatadi, ularga bu ta'sir qilmaydi. Caddyfile
+xostda turadi, ya'ni deploy uni yangilamaydi:
+
+```sh
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 ```
-
-Caddy `/api/miniapp/*` ni Next.js'ga uzatishi kerak. Mini App Telegram Web
-freymida ochilishi uchun `/miniapp/*` da `X-Frame-Options` qo'shilmaydi;
-Next.js `frame-ancestors` bilan faqat Telegram originlariga ruxsat beradi.
 
 ## Lokal HTTPS testi
 

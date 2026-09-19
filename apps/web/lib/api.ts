@@ -29,7 +29,7 @@ const ACCESS_KEY = "ib-access";
 const MINIAPP_ACCESS_KEY = "ib-miniapp-access";
 
 export function userAPIURL(path: string): string {
-  return isMiniAppPage() ? `/api/miniapp${path.replace(/^\/api(?=\/)/, "")}` : `${API_BASE}${path}`;
+  return isMiniAppPage() ? `/miniapp/api${path.replace(/^\/api(?=\/)/, "")}` : `${API_BASE}${path}`;
 }
 const ADMIN_KEY = "ib-admin";
 // Legacy key: the refresh token used to be persisted here. The web app never

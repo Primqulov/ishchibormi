@@ -26,7 +26,7 @@ export function uploadPreviewURL(url: string) {
   try {
     const parsed = new URL(url);
     if (parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)) {
-      return `/api/miniapp/image?url=${encodeURIComponent(url)}`;
+      return `/miniapp/api/image?url=${encodeURIComponent(url)}`;
     }
   } catch { /* Preserve the original value; upload validation runs server-side. */ }
   return url;

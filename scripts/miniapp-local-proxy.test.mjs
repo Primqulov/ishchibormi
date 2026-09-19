@@ -14,13 +14,13 @@ test("tunnel only forwards Mini App routes and never exposes admin or OTP", asyn
   await once(proxy, "listening");
   try {
     const base = `http://127.0.0.1:${proxy.address().port}`;
-    for (const path of ["/admin", "/api/admin/login", "/api/auth/otp/peek?token=secret", "/api/miniapp/auth/otp/peek", "/uploads/file.jpg", "/_next/image?url=http://127.0.0.1:8080/admin", "/miniapp/%2e%2e/admin"]) {
+    for (const path of ["/admin", "/api/admin/login", "/api/auth/otp/peek?token=secret", "/miniapp/api/auth/otp/peek", "/uploads/file.jpg", "/_next/image?url=http://127.0.0.1:8080/admin", "/miniapp/%2e%2e/admin"]) {
       assert.equal((await fetch(base + path)).status, 404);
     }
     assert.equal(calls, 0);
     assert.equal((await fetch(base + "/miniapp/post")).status, 200);
     assert.equal((await fetch(base + "/leaflet/leaflet.js")).status, 200);
-    assert.equal((await fetch(base + "/api/miniapp/auth/miniapp/session", { method: "POST", body: "{}" })).status, 200);
+    assert.equal((await fetch(base + "/miniapp/api/auth/miniapp/session", { method: "POST", body: "{}" })).status, 200);
     assert.equal(calls, 3);
   } finally { proxy.closeAllConnections(); proxy.close(); backend.closeAllConnections(); backend.close(); }
 });
