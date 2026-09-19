@@ -29,7 +29,8 @@ type Sender interface {
 	Configured() bool
 	BotUsername(context.Context) (string, error)
 	ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error)
-	SendChannelPost(context.Context, int64, tgsend.ChannelPost) (int64, error)
+	SendChannelVenue(context.Context, int64, float64, float64, string, string) (int64, error)
+	SendChannelHTML(context.Context, int64, string, []tgsend.Button) (int64, error)
 }
 
 // Bitta tsiklda yuboriladigan post soni. Telegram umumiy chegarasi sekundiga
@@ -300,11 +301,35 @@ func (p *Publisher) deliverNext(parent context.Context) (bool, error) {
 	if p.channels.FindOne(ctx, bson.M{"_id": claimed.ChatID, "status": "active"}).Err() != nil {
 		return true, p.finish(ctx, claimed, "skipped", "channel_inactive", 0)
 	}
-	id, err := p.sender.SendChannelPost(ctx, claimed.ChatID, Message(live, p.botUsername))
+	post := Message(live, p.botUsername)
+	// Xarita kartasi BIRINCHI ketadi — tafsilotlar uning ostida turishi
+	// kerak. Venue caption qabul qilmaydi, shuning uchun ular alohida
+	// xabarda. Karta ID si darhol saqlanadi: matn yuborishda xato bo'lsa,
+	// qayta urinish kartani ikkinchi marta chiqarmaydi.
+	if post.Venue && claimed.VenueMessageID == 0 {
+		venueID, err := p.sender.SendChannelVenue(ctx, claimed.ChatID, post.Lat, post.Lng, post.Title, post.Address)
+		if err != nil {
+			return true, p.afterSendError(ctx, claimed, err)
+		}
+		if _, err := p.posts.UpdateOne(ctx, p.lease(claimed), bson.M{"$set": bson.M{"venueMessageId": venueID}}); err != nil {
+			return true, err
+		}
+		claimed.VenueMessageID = venueID
+	}
+	id, err := p.sender.SendChannelHTML(ctx, claimed.ChatID, post.Text, post.Buttons)
 	if err == nil && id > 0 {
 		p.channelDelivered(ctx, claimed.ChatID)
 		return true, p.finish(ctx, claimed, "sent", "", id)
 	}
+	return true, p.afterSendError(ctx, claimed, err)
+}
+
+// afterSendError Telegram javobiga qarab holatni belgilaydi.
+//
+// Aniq rad javobi (4xx) — kanal uziladi; 429 — kutib qayta urinish; qolgani
+// NOANIQ: xabar yetib bordimi, noma'lum. Takroriy post chiqarmaslik uchun
+// bunday holatda to'xtaymiz va avtomatik qayta yubormaymiz.
+func (p *Publisher) afterSendError(ctx context.Context, claimed models.ChannelPost, err error) error {
 	var apiErr *tgsend.APIError
 	if errors.As(err, &apiErr) {
 		if apiErr.Code == 429 {
@@ -312,19 +337,17 @@ func (p *Publisher) deliverNext(parent context.Context) (bool, error) {
 			if delay < time.Second {
 				delay = time.Second
 			}
-			return true, p.retry(ctx, claimed, delay, "telegram_rate_limit")
+			return p.retry(ctx, claimed, delay, "telegram_rate_limit")
 		}
 		if apiErr.Code >= 400 && apiErr.Code < 500 && apiErr.Code != 408 {
 			// Aniq rad javobi: bot chiqarilgan, kanal o'chirilgan yoki huquq
 			// olingan. Kanalni uzamiz — aks holda har e'lon shu xatoni
 			// qaytarib, navbatni bekorga band qilardi.
 			p.deactivate(ctx, claimed.ChatID, "telegram_rejected")
-			return true, p.finish(ctx, claimed, "failed", "telegram_rejected", 0)
+			return p.finish(ctx, claimed, "failed", "telegram_rejected", 0)
 		}
 	}
-	// Timeout, 5xx yoki uzilgan ulanish — xabar yetdimi, noma'lum. Takroriy
-	// post chiqarmaslik uchun shu yerda to'xtaymiz.
-	return true, p.finish(ctx, claimed, "uncertain", "delivery_not_confirmed", 0)
+	return p.finish(ctx, claimed, "uncertain", "delivery_not_confirmed", 0)
 }
 
 func (p *Publisher) lease(post models.ChannelPost) bson.M {
@@ -368,44 +391,45 @@ func (p *Publisher) channelDelivered(ctx context.Context, chatID int64) {
 //
 // Aloqa telefoni, to'liq tavsif va manzil matni kanalga CHIQMAYDI: ularni
 // ko'rish uchun odam botga o'tadi.
-func Message(e models.Elon, username string) tgsend.ChannelPost {
-	buttons := []tgsend.Button{{Text: "Ish haqida batafsil", URL: "https://t.me/" + username + "?start=job_" + e.ID.Hex()}}
+// Post — kanalga yuboriladigan e'lon. Koordinatasi bor bo'lsa avval xarita
+// kartasi, so'ng uning ostida to'liq matn ketadi.
+type Post struct {
+	Venue          bool
+	Lat, Lng       float64
+	Title, Address string
+	Text           string
+	Buttons        []tgsend.Button
+}
+
+func Message(e models.Elon, username string) Post {
+	post := Post{
+		Text:    summaryHTML(e),
+		Buttons: []tgsend.Button{{Text: "Ish haqida batafsil", URL: "https://t.me/" + username + "?start=job_" + e.ID.Hex()}},
+	}
 	if tgsend.ValidCoordinates(e.Lat, e.Lng) {
-		return tgsend.ChannelPost{
-			Venue: true, Lat: e.Lat, Lng: e.Lng,
-			Title: venueTitle(e), Address: venueAddress(e), Buttons: buttons,
-		}
+		post.Venue, post.Lat, post.Lng = true, e.Lat, e.Lng
+		post.Title, post.Address = venueTitle(e), venueAddress(e)
 	}
-	return tgsend.ChannelPost{Text: summaryHTML(e), Buttons: buttons}
+	return post
 }
 
-// Venue sarlavhasi — ish nomi va eng muhim ikki fakt. Telegram uni bitta
-// qatorda, qalin qilib ko'rsatadi, ya'ni uzun matn qirqilib ketadi.
+// Karta sarlavhasi — faqat ish nomi. Kishi soni, ish haqi va sana ostidagi
+// matnda to'liq yoziladi, shuning uchun bu yerda takrorlanmaydi.
 func venueTitle(e models.Elon) string {
-	head := shorten(plain(e.Title), 90)
-	facts := []string{}
-	if e.WorkersNeeded > 0 {
-		facts = append(facts, fmt.Sprintf("%d kishi", e.WorkersNeeded))
+	title := shorten(plain(e.Title), 120)
+	if title == "" {
+		return "Ish e'loni"
 	}
-	facts = append(facts, payText(e))
-	return shorten(head+" — "+strings.Join(facts, ", "), 250)
+	return title
 }
 
-// Venue manzili — karta ostidagi kichik qator: hudud va vaqt.
+// Karta ostidagi kichik qator — hudud. Telegram bo'sh manzilni rad etadi,
+// xaritaning o'zi esa baribir aniq joyni ko'rsatadi.
 func venueAddress(e models.Elon) string {
-	parts := []string{}
 	if address := placeText(e); address != "" {
-		parts = append(parts, address)
+		return shorten(address, 250)
 	}
-	if when := whenText(e); when != "" {
-		parts = append(parts, when)
-	}
-	if len(parts) == 0 {
-		// Telegram bo'sh manzilni rad etadi, xaritaning o'zi esa baribir
-		// aniq joyni ko'rsatadi.
-		return "Manzil xaritada"
-	}
-	return shorten(strings.Join(parts, " · "), 250)
+	return "Manzil xaritada"
 }
 
 // summaryHTML — koordinatasiz e'lon uchun eski matn posti.

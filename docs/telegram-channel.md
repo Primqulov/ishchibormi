@@ -10,18 +10,25 @@ Kanal posti botdagi suhbatdan forward qilinmaydi. Alohida `sendMessage`
 orqali kanal posti yaratiladi; ovozli bildirishnoma va havola preview si
 o'chirilgan.
 
-Koordinatasi bor e'lon **venue** xabari bo'lib ketadi: Telegram uni o'z
-xarita kartasi qilib ko'rsatadi va ustiga bosilganda O'ZINING xaritasini
-ochadi — brauzer yoki Google Maps'ga chiqib ketmaydi, foydalanuvchi xohlasa
-o'zi tashqi xaritaga o'tadi. Oddiy havola tugmasi buni qila olmaydi, shuning
-uchun bu yerda venue ishlatiladi.
+Koordinatasi bor e'lon **ikkita xabar** bo'lib chiqadi: avval Telegramning
+o'z xarita kartasi (**venue**), so'ng uning ostida to'liq matn va tugma.
+Kartaga bosilganda Telegram O'ZINING xaritasini ochadi — brauzer yoki Google
+Maps'ga chiqib ketmaydi, foydalanuvchi xohlasa o'zi tashqi xaritaga o'tadi.
+Oddiy havola tugmasi buni qila olmaydi, venue esa caption qabul qilmaydi —
+shuning uchun tafsilotlar alohida xabarda.
 
-Kartaning sarlavhasi — ish nomi, kishi soni va ish haqi; ostidagi qator —
-hudud va vaqt. Ikkalasi ham PLAIN matn (HTML emas), shuning uchun ekranlash
+Kartada faqat joy konteksti: ish nomi va hudud. Kishi soni, ish haqi va sana
+ostidagi matnda to'liq yoziladi, ya'ni kartada takrorlanmaydi. Karta
+sarlavhasi va manzili PLAIN matn (HTML emas), shuning uchun ekranlash
 qilinmaydi — aks holda kartada `&amp;` ko'rinardi.
 
-Koordinatasi yo'q yoki buzuq e'lon (eski yozuv) avvalgidek HTML matn posti
-bo'ladi.
+Karta matndan OLDIN yuboriladi va uning message ID si darhol saqlanadi
+(`channel_posts.venueMessageId`). Shunda matn yuborishda xato bo'lsa, qayta
+urinish kartani ikkinchi marta chiqarmaydi. Karta yuborilmasa matn ham
+ketmaydi: yarim post kartasiz tafsilot yoki tafsilotsiz karta bo'lib
+qolardi.
+
+Koordinatasi yo'q yoki buzuq e'lon (eski yozuv) faqat matn posti bo'ladi.
 
 Aloqa telefoni, to'liq tavsif, aniq manzil matni va ish beruvchi haqidagi
 ma'lumot kanalga CHIQMAYDI — ularni ko'rish uchun odam botga o'tadi.
@@ -48,8 +55,22 @@ qilinmaydi: e'lonlar oqimi suhbatni bosib ketardi.
 > ┌──────────────────────────┐
 > │   XARITA (Telegram)   📍 │
 > └──────────────────────────┘
-> **Yuk tushirish uchun ishchilar kerak — 4 kishi, 250 000 so'm / kishi**
-> Toshkent, Chilonzor · 18.09.2026 · 09:00 (Toshkent)
+> **Yuk tushirish uchun ishchilar kerak**
+> Toshkent, Chilonzor
+>
+> ────────────────────────────
+>
+> 💼 **Yuk tushirish uchun ishchilar kerak**
+>
+> 👥 Kerak: **4 kishi**
+>
+> 💰 Ish haqi: **250 000 so'm / kishi**
+>
+> 📅 18.09.2026 · 09:00 (Toshkent)
+>
+> 📍 Toshkent, Chilonzor
+>
+> Ish haqida batafsil ma'lumot olish uchun pastdagi tugmani bosing.
 >
 > **Ish haqida batafsil**
 

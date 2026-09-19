@@ -81,10 +81,13 @@ func TestChannelTransportResolvesRightsAndSendsOnlySilentChannelPost(t *testing.
 			if err != nil || info.BotUsername != "testbot" {
 				t.Fatal("resolve failed", err)
 			}
-			id, err := c.SendChannelPost(context.Background(), info.ID, ChannelPost{
-				Venue: true, Lat: 41.3111, Lng: 69.2797, Title: "Ish — 2 kishi", Address: "Toshkent, Chilonzor",
-				Buttons: []Button{{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"}},
-			})
+			// Xarita kartasi va uning ostidagi matn — ikkita alohida xabar:
+			// Telegram venue caption qabul qilmaydi.
+			if _, err := c.SendChannelVenue(context.Background(), info.ID, 41.3111, 69.2797, "Ish", "Toshkent, Chilonzor"); err != nil {
+				t.Fatal("venue failed", err)
+			}
+			id, err := c.SendChannelHTML(context.Background(), info.ID, "<b>Ish</b>",
+				[]Button{{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"}})
 			if err != nil || id != 12 || !sent {
 				t.Fatal("send failed", err)
 			}
@@ -98,7 +101,7 @@ func TestChannelTransportNeverLeaksTokenOrAcceptsPrivateTarget(t *testing.T) {
 		calls++
 		return nil, errors.New("transport " + r.URL.String())
 	})
-	_, err := c.SendChannelPost(context.Background(), 123, ChannelPost{Text: "message", Buttons: []Button{{Text: "Open", URL: "https://t.me/testbot"}}})
+	_, err := c.SendChannelHTML(context.Background(), 123, "message", []Button{{Text: "Open", URL: "https://t.me/testbot"}})
 	if err == nil || calls != 0 {
 		t.Fatal("private target sent")
 	}

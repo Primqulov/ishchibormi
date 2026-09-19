@@ -47,9 +47,13 @@ type ChannelPost struct {
 	LeaseID       primitive.ObjectID `bson:"leaseId,omitempty"`
 	LeaseUntil    time.Time          `bson:"leaseUntil,omitempty"`
 	MessageID     int64              `bson:"messageId,omitempty"`
-	Reason        string             `bson:"reason,omitempty"`
-	CreatedAt     time.Time          `bson:"createdAt"`
-	FinishedAt    time.Time          `bson:"finishedAt,omitempty"`
+	// Xarita kartasi asosiy matndan OLDIN yuboriladi va uning ID si darhol
+	// saqlanadi. Shunda matn yuborishda xato bo'lsa, qayta urinish kartani
+	// ikkinchi marta chiqarmaydi.
+	VenueMessageID int64     `bson:"venueMessageId,omitempty"`
+	Reason         string    `bson:"reason,omitempty"`
+	CreatedAt      time.Time `bson:"createdAt"`
+	FinishedAt     time.Time `bson:"finishedAt,omitempty"`
 }
 
 // Bot administrator bo'lgan kanal. _id — Telegram chat ID si, ya'ni bir

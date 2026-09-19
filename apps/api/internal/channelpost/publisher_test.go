@@ -30,7 +30,11 @@ type fakeSender struct {
 	username            string
 	text                string
 	buttons             []tgsend.Button
-	post                tgsend.ChannelPost
+	venues              int
+	venueErr            error
+	venueTitle          string
+	venueAddress        string
+	venueLat, venueLng  float64
 }
 
 func (f *fakeSender) Configured() bool { return !f.off }
@@ -40,20 +44,39 @@ func (f *fakeSender) BotUsername(context.Context) (string, error) {
 func (f *fakeSender) ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error) {
 	return tgsend.ChannelInfo{ID: testChat, BotUsername: f.username}, f.resolveErr
 }
-func (f *fakeSender) SendChannelPost(_ context.Context, id int64, post tgsend.ChannelPost) (int64, error) {
+func (f *fakeSender) SendChannelVenue(_ context.Context, id int64, lat, lng float64, title, address string) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if id >= 0 {
 		panic("private destination")
+	}
+	f.venueTitle, f.venueAddress = title, address
+	f.venueLat, f.venueLng = lat, lng
+	if f.venueErr != nil {
+		return 0, f.venueErr
+	}
+	f.venues++
+	return 77, nil
+}
+func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b []tgsend.Button) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if id >= 0 {
+		panic("private destination")
+	}
+	f.text, f.buttons = text, b
+	if f.sendErr != nil {
+		// Yiqilgan urinish YUBORILGAN xabar emas: sanoq faqat kanalga
+		// haqiqatan chiqqan postlarni hisoblaydi, aks holda "takror
+		// yuborilmadi" tekshiruvlari ma'nosini yo'qotardi.
+		return 0, f.sendErr
 	}
 	if f.calls == nil {
 		f.calls = map[int64]int{}
 	}
 	f.calls[id]++
 	f.total++
-	f.post = post
-	f.text, f.buttons = post.Text, post.Buttons
-	return 123, f.sendErr
+	return 123, nil
 }
 func (f *fakeSender) sent(chat int64) int {
 	f.mu.Lock()
@@ -383,10 +406,10 @@ func TestChannelMessageEscapesTextAndKeepsPayMeaning(t *testing.T) {
 	}
 }
 
-// Kanalga xarita havolasi chiqadi, aloqa ma'lumoti esa CHIQMAYDI: ish
-// qayerdaligini bilmasdan unga borib bo'lmaydi, telefon va to'liq tavsif
-// esa faqat botda ochiladi.
-func TestChannelPostCarriesTheMapButMotContactDetails(t *testing.T) {
+// Kanalga xarita kartasi va uning ostidagi to'liq matn chiqadi, aloqa
+// ma'lumoti esa CHIQMAYDI: ish qayerdaligini bilmasdan unga borib bo'lmaydi,
+// telefon va to'liq tavsif esa faqat botda ochiladi.
+func TestChannelPostCarriesTheMapButNotContactDetails(t *testing.T) {
 	base := models.Elon{
 		ID: primitive.NewObjectID(), Title: "Yuk tushirish", WorkersNeeded: 3,
 		Description:  "Uzun tavsif va qo'shimcha shartlar",
@@ -407,11 +430,19 @@ func TestChannelPostCarriesTheMapButMotContactDetails(t *testing.T) {
 	if strings.Contains(card, base.ContactPhone) || strings.Contains(card, base.Description) || strings.Contains(card, base.LocationText) {
 		t.Fatalf("channel post leaked private details: %q", card)
 	}
-	if !strings.Contains(post.Title, "Yuk tushirish") || !strings.Contains(post.Title, "3 kishi") || !strings.Contains(post.Title, "150 000") {
-		t.Fatalf("venue title lost the key facts: %q", post.Title)
+	// Karta faqat joy konteksti: nom va hudud. Tafsilotlar ostidagi matnda,
+	// ya'ni kartada takrorlanmaydi.
+	if post.Title != "Yuk tushirish" || !strings.Contains(post.Address, "Chilonzor") {
+		t.Fatalf("venue card: title=%q address=%q", post.Title, post.Address)
 	}
-	if !strings.Contains(post.Address, "Chilonzor") {
-		t.Fatalf("venue address: %q", post.Address)
+	// Matn kartaning OSTIDA turadi va to'liq tafsilotni beradi.
+	for _, want := range []string{"Yuk tushirish", "3 kishi", "150 000", "Chilonzor"} {
+		if !strings.Contains(post.Text, want) {
+			t.Fatalf("text under the card is missing %q: %s", want, post.Text)
+		}
+	}
+	if strings.Contains(post.Text, base.ContactPhone) || strings.Contains(post.Text, base.Description) || strings.Contains(post.Text, base.LocationText) {
+		t.Fatalf("text under the card leaked private details: %q", post.Text)
 	}
 	// Venue sarlavhasi PLAIN matn — HTML ekranlash u yerda `&amp;` bo'lib
 	// ko'rinardi.
@@ -422,7 +453,7 @@ func TestChannelPostCarriesTheMapButMotContactDetails(t *testing.T) {
 		t.Fatalf("want only the job button, got %+v", post.Buttons)
 	}
 
-	// Koordinatasiz e'lon (eski yozuv) avvalgidek matn posti bo'ladi.
+	// Koordinatasiz e'lon (eski yozuv) faqat matn posti bo'ladi — karta yo'q.
 	plain := Message(base, "testbot")
 	if plain.Venue || plain.Text == "" {
 		t.Fatalf("listing without coordinates: %+v", plain)
@@ -437,5 +468,73 @@ func TestChannelRejectsImpossibleCoordinates(t *testing.T) {
 		if post := Message(e, "testbot"); post.Venue {
 			t.Fatalf("lat=%v lng=%v became a venue", tc.lat, tc.lng)
 		}
+	}
+}
+
+// Xarita kartasi matndan OLDIN ketadi va qayta urinishda IKKINCHI marta
+// chiqmaydi: aks holda kanalda ikkita bir xil karta qolardi.
+func TestChannelSendsTheMapCardBeforeTheTextAndNeverTwice(t *testing.T) {
+	p, f, e := testPublisher(t)
+	e.Lat, e.Lng = 41.3111, 69.2797
+	addChannel(t, p, testChat, "active")
+	insertListing(t, p, e)
+	if _, err := p.fanOutNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Matn yuborishda vaqtinchalik xato: karta allaqachon ketgan.
+	f.sendErr = &tgsend.APIError{Code: 429, RetryAfter: time.Second}
+	if _, err := p.deliverNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	saved := post(t, p, e.ID, testChat)
+	if f.venues != 1 || saved.VenueMessageID != 77 {
+		t.Fatalf("map card not recorded: venues=%d saved=%+v", f.venues, saved)
+	}
+	if f.total != 0 || saved.Status != "pending" {
+		t.Fatalf("text send state: total=%d status=%s", f.total, saved.Status)
+	}
+	if f.venueLat != e.Lat || f.venueLng != e.Lng || f.venueTitle != "Yuk tushirish" {
+		t.Fatalf("map card content: %q at %v,%v", f.venueTitle, f.venueLat, f.venueLng)
+	}
+
+	f.sendErr = nil
+	if _, err := p.posts.UpdateOne(context.Background(), bson.M{"elonId": e.ID}, bson.M{"$set": bson.M{"nextAttemptAt": time.Now().Add(-time.Minute)}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.deliverNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if f.venues != 1 {
+		t.Fatalf("map card sent %d times", f.venues)
+	}
+	if f.total != 1 || post(t, p, e.ID, testChat).Status != "sent" {
+		t.Fatalf("text not delivered after retry: total=%d", f.total)
+	}
+}
+
+// Karta yuborilmasa matn ham ketmaydi: tafsilotsiz karta ham, kartasiz
+// tafsilot ham yarim post bo'lib qolardi.
+func TestChannelSkipsTheTextWhenTheMapCardFails(t *testing.T) {
+	p, f, e := testPublisher(t)
+	e.Lat, e.Lng = 41.3111, 69.2797
+	addChannel(t, p, testChat, "active")
+	insertListing(t, p, e)
+	if _, err := p.fanOutNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	f.venueErr = &tgsend.APIError{Code: 403}
+	if _, err := p.deliverNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if f.total != 0 {
+		t.Fatal("text sent without its map card")
+	}
+	if s := post(t, p, e.ID, testChat); s.Status != "failed" {
+		t.Fatalf("status = %s, want failed", s.Status)
+	}
+	// Aniq rad javobi kanalni uzadi — avvalgidek.
+	if channelStatus(t, p, testChat) != "inactive" {
+		t.Fatal("rejecting channel stayed active")
 	}
 }
