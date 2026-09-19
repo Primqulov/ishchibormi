@@ -124,10 +124,15 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      backend:
+        condition: service_healthy
     env_file: .env
     environment:
       MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017}
       MONGO_DB: ${MONGO_DB:-ishchibormi}
+      BOT_API_BASE_URL: http://backend:8080
+      WEB_BASE_URL: ${WEB_BASE_URL:-https://ishchibormi.uz}
+      TELEGRAM_MINIAPP_URL: ${TELEGRAM_MINIAPP_URL:-https://ishchibormi.uz/miniapp/post}
 
   frontend:
     build:
@@ -155,6 +160,7 @@ services:
     env_file: .env
     environment:
       NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-https://ishchibormi.uz}
+      MINIAPP_API_BASE_URL: http://backend:8080
       NEXT_PUBLIC_WS_BASE: ${NEXT_PUBLIC_WS_BASE:-wss://ishchibormi.uz}
       NEXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-Ishchibormibot}
       ADMIN_PANEL_HOST: ${ADMIN_PANEL_HOST:-}

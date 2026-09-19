@@ -228,6 +228,13 @@ jobs:
             # compose uni .env dan oladi, ya'ni shu yerda yozilishi kifoya.
             set_env_if_set ADMIN_PANEL_HOST      '${{ secrets.ADMIN_PANEL_HOST }}'
 
+            # Yangi e'lonlar chiqadigan Telegram kanali (@username yoki -100...).
+            # Bo'sh bo'lsa kanalga chiqarish jimgina o'chiq qoladi — API
+            # to'liq ishlayveradi (S3/FCM/Gemini bilan bir xil naqsh).
+            # Bot o'sha kanalda administrator va "Post Messages" huquqiga ega
+            # bo'lishi shart. Batafsil: docs/telegram-channel.md
+            set_env_if_set TELEGRAM_JOBS_CHANNEL_ID '${{ secrets.TELEGRAM_JOBS_CHANNEL_ID }}'
+
             # ── Moderatsiyani yoqish ─────────────────────────────────────────
             # Bayroq ATAYLAB kalit mavjudligidan kelib chiqib qo'yiladi.
             #

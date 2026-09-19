@@ -121,6 +121,7 @@ Bazaviy prefiks: `/api`. Autentifikatsiya: `Authorization: Bearer <accessToken>`
 | GET | `/api/auth/otp/peek` | `auth.DevPeekOTP` | (Dev) kodni ko'rish. |
 | POST | `/api/auth/refresh` | `auth.Refresh` | Access token'ni yangilash. |
 | GET | `/api/elons` | `elon.Feed` | Ommaviy e'lonlar (qidiruv/filtr/sahifalash). |
+| GET | `/api/elons/nearby?lat=&lng=&page=&limit=` | `elon.Nearby` | Joylashuvga eng yaqin faol ishlar, masofa bo'yicha tartiblangan. |
 | GET | `/api/elons/{id}` | `elon.Get` | Bitta e'lon (ko'rishlar +1). |
 | GET | `/api/users/{id}` | `user.GetPublic` | Ochiq profil. |
 | GET | `/api/users?q=` | `user.Search` | Foydalanuvchi qidirish. |
@@ -198,7 +199,59 @@ Bazaviy prefiks: `/api`. Autentifikatsiya: `Authorization: Bearer <accessToken>`
   `/api/auth/otp/verify` orqali kirish yakunlanadi.
 - **`otp/internal/envfile/`** — `.env` yuklovchi.
 
-Bot alohida Go moduli; API bilan aloqasi faqat Mongo orqali.
+Bot alohida Go moduli. OTP oqimi Mongo orqali ishlaydi; `/post` orqali
+e'lon berish esa mavjud API endpointlaridan foydalanadi. To'liq oqim,
+platformadagi maydonlar bilan moslik va sozlamalar:
+[Telegram orqali e'lon berish](docs/telegram-posting.md).
+
+**Ish bildirishnomalari** ham shu botdan keladi: ariza yuborilgani tasdig'i,
+ish beruvchiga yangi ariza, qabul/rad,
+bekor qilish (jumladan joy to'lishi), ish shartlari o'zgarishi, yakunlash
+so'rovi va ish yakunlanishi. API `TELEGRAM_BOT_TOKEN` orqali foydalanuvchining
+kirishda bog'langan `telegramId` manziliga yuboradi; bot qaytadan polling
+qilinmaydi. Admin/dasturchi xabarlari, broadcast, xavfsizlik va noma'lum
+turdagi bildirishnomalar botga uzatilmaydi.
+
+Telegram navbati bildirishnoma bilan bitta Mongo hujjatida saqlanadi va API
+xabar ostiga `WEB_BASE_URL` asosida arizani yoki e'lonni ochadigan **inline
+tugma** qo'yadi (`/applications/{id}`, `/elon/{id}`, aks holda
+`/notifications`). Standart sayt `https://ishchibormi.uz`; lokal test uchun
+`WEB_BASE_URL=http://127.0.0.1:3000` belgilanadi va shu origin
+`CORS_ORIGINS` ro'yxatiga qo'shiladi. Telegram `localhost` tugmasini rad etib,
+butun xabarni yubormaydi; numeric loopback havolasi faqat shu kompyuterda
+ishlaydi. Tugma URL'i Telegram tomonidan rad etilsa, xabarning o'zi
+tugmasiz qayta yuboriladi. Ariza tafsilotlarini faqat
+ariza beruvchi va e'lon egasi ko'radi; login va profilni to'ldirishdan keyin
+foydalanuvchi shu havolaga qaytadi.
+
+Ariza qabul qilinganda ishchiga yuboriladigan xabarda ish nomi, sana va
+hafta kuni, ish vaqti (Toshkent vaqti), ish beruvchining aloqa raqami,
+manzil va «Xaritada ochish» havolasi ham bo'ladi. E'londagi aloqa raqami
+bo'sh bo'lsa, ish beruvchining profil raqami olinadi. Tafsilotlar qabul
+paytida navbatga saqlanadi; kiritilmagan sana, vaqt yoki lokatsiya xabarda
+ochiq ko'rsatiladi. «Arizani ko'rish» tugmasi ham qoladi.
+
+Tugmadagi manzil oddiy `https://` havola — ataylab. `ishchibormi.uz` tasdiqlangan
+Android App Link (`/.well-known/assetlinks.json` + ilova manifesti), shuning
+uchun ilova o'rnatilgan telefonda Telegram havolani **ilovaga** beradi, qolgan
+hamma joyda (desktop, iOS, ilovasiz telefon) **veb sahifa** ochiladi. `tg://`
+yoki maxsus sxema ikkalasini ham qila olmaydi va Telegram uni tugmada qabul
+qilmaydi.
+
+> Tugmaning har bir yo'li ikki joyda ro'yxatdan o'tishi SHART:
+> `flutter-app/android/app/src/main/AndroidManifest.xml` dagi intent-filter va
+> `DeepLinkService.parse`. Faqat birinchisida bo'lsa — ilova ochiladi-yu, ekran
+> topilmaydi; faqat ikkinchisida bo'lsa — ilova bor bo'lsa ham brauzer ochiladi.
+> iOS'da Associated Domains hali sozlanmagan, ya'ni iPhone'da tugma doim veb
+> sahifani ochadi.
+
+Telegram navbati API
+qayta ishga tushganda davom etadi. Vaqtinchalik xatolar 12 urinishgacha
+qayta tekshiriladi, Telegram `retry_after` muddati hisobga olinadi. Botni
+bloklagan, Telegram'i bog'lanmagan, o'chirilgan yoki demo hisoblarga xabar
+yuborilmaydi. Oldingi bildirishnomalar qayta tarqatilmaydi. FCM sozlamalari
+bu kanalga ta'sir qilmaydi. Telegram yuborishni tasdiqlagan zahoti jarayon
+uzilsa, keyingi urinishda takroriy xabar ehtimoli bor (at-least-once).
 
 > Eslatma: qo'llab-quvvatlash endi shaxsiy Telegram akkaunti orqali — avvalgi
 > taklif/shikoyat botlari (`cmd/feedbackbot`, `bot_feedback`/`support_admins`

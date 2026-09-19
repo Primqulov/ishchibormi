@@ -189,6 +189,10 @@ api.ishchibormi.uz {
 
 ishchibormi.uz {
 	encode zstd gzip
+	# Telegram Web ichida faqat Mini App freymda ochilishi mumkin.
+	# Uning frame-ancestors siyosatini Next.js beradi.
+	@ordinaryPage not path /miniapp/*
+	header @ordinaryPage X-Frame-Options "SAMEORIGIN"
 
 	# ── Xavfsizlik sarlavhalari ────────────────────────────────────────────
 	header {
@@ -199,8 +203,6 @@ ishchibormi.uz {
 		# Brauzer fayl turini "taxmin qilmasin" — yuklangan rasm ichiga
 		# yashiringan skript bajarilib ketmasin.
 		X-Content-Type-Options "nosniff"
-		# Saytni begona iframe ichiga joylashtirib bo'lmasin (clickjacking).
-		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		# Server nomi/versiyasini oshkor qilmaslik: hujumchiga qaysi
 		# dasturiy ta'minot ekanini aytmaymiz.
@@ -292,7 +294,11 @@ ishchibormi.uz {
 	#   /api/*      — barcha REST endpoint'lar (cmd/api/main.go: r.Route("/api"))
 	#   /uploads/*  — lokal diskdagi rasmlar (S3 sozlanmagan holat)
 	#   /healthz    — monitoring
-	@api path /api/* /uploads/* /healthz
+	@api {
+		path /api/* /uploads/* /healthz
+		# Mini App proksisi Next.js'da: qolgan handle unga uzatadi.
+		not path /api/miniapp/*
+	}
 	handle @api {
 		reverse_proxy 127.0.0.1:8080 {
 			# XAVFSIZLIK: Caddy standart holatda X-Forwarded-For'ga mijoz
