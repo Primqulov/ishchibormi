@@ -357,3 +357,82 @@ func TestRegisterButtonAndIDGuard(t *testing.T) {
 		t.Fatal("registration accepted a listing ID instead of the fixed marker")
 	}
 }
+
+// Taklif ichidagi havola tugmasini matni bo'yicha topadi.
+func offerURL(h *harness, label string) string {
+	for _, raw := range h.b.messages {
+		m, ok := raw.(tg.MessageConfig)
+		if !ok {
+			continue
+		}
+		kb, ok := m.ReplyMarkup.(tg.InlineKeyboardMarkup)
+		if !ok {
+			continue
+		}
+		for _, row := range kb.InlineKeyboard {
+			for _, b := range row {
+				if strings.Contains(b.Text, label) && b.URL != nil {
+					return *b.URL
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// Taklif hisobi YO'Q odamga chiqadi va uchala yo'lni — bot, Android ilova,
+// sayt — birga ko'rsatadi.
+func TestRegistrationOfferOnlyForAccountlessUserAndListsAllThreeWays(t *testing.T) {
+	h := workerSetup(t)
+	h.a.newUser = true
+	h.a.profile = Profile{ID: "worker"}
+	h.text("/start")
+	if !h.hasText("Hisobingiz hali ochilmagan") {
+		t.Fatal("accountless user was not offered registration")
+	}
+	if !hasCallback(h.b.messages, "w:register:new") {
+		t.Fatal("offer has no in-bot registration button")
+	}
+	if url := offerURL(h, "Android ilova"); !strings.Contains(url, "play.google.com") {
+		t.Fatalf("offer does not point to the mobile app: %q", url)
+	}
+	if url := offerURL(h, "Sayt"); !strings.HasPrefix(url, "https://ishchibormi.uz") {
+		t.Fatalf("offer does not point to the website: %q", url)
+	}
+	// Taklif ish qidirishni to'smaydi.
+	if !h.hasText("Kerakli bo'limni") {
+		t.Fatal("offer replaced the main menu")
+	}
+	if h.s.draft.Registered {
+		t.Fatal("accountless user cached as registered")
+	}
+}
+
+func TestRegistrationOfferSkippedAndCachedForExistingAccount(t *testing.T) {
+	h := workerSetup(t) // setup() hisobi bor
+	h.text("/start")
+	if h.hasText("Hisobingiz hali ochilmagan") {
+		t.Fatal("registered user was offered registration")
+	}
+	if !h.s.draft.Registered || h.a.logins != 1 {
+		t.Fatalf("registration state not cached: registered=%v logins=%d", h.s.draft.Registered, h.a.logins)
+	}
+	h.text("/menu")
+	if h.a.logins != 1 {
+		t.Fatal("cached registration state still triggered a session request")
+	}
+}
+
+// Sessiya tekshiruvi yiqilsa bosh menyu baribir ishlashi kerak: taklif
+// ikkinchi darajali, uning xatosi menyuni buzmaydi.
+func TestRegistrationOfferSkippedWhenSessionCheckFails(t *testing.T) {
+	h := workerSetup(t)
+	h.a.loginErr = errors.New("api unavailable")
+	h.text("/start")
+	if !h.hasText("Kerakli bo'limni") {
+		t.Fatal("main menu lost when the session check failed")
+	}
+	if h.hasText("Hisobingiz hali ochilmagan") || h.s.draft.Registered {
+		t.Fatal("a failed check was treated as a definite answer")
+	}
+}

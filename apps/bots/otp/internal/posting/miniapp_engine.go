@@ -136,5 +136,5 @@ func (e *Engine) Handle(ctx context.Context, u tg.Update) error {
 	if err := e.persist(ctx, d, u.UpdateID); err != nil {
 		return err
 	}
-	return e.workerHome(sender)
+	return e.workerHome(ctx, d)
 }

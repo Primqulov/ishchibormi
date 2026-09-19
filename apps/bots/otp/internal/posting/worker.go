@@ -47,7 +47,8 @@ func (e *Engine) workerMessage(chat int64, text string, rows ...[]tg.InlineKeybo
 	_, err := e.Bot.Send(m)
 	return err
 }
-func (e *Engine) workerHome(chat int64) error {
+func (e *Engine) workerHome(ctx context.Context, d *Draft) error {
+	chat := d.ChatID
 	// Xabar ATAYLAB workerMessage orqali emas: u klaviaturani olib tashlaydi,
 	// bu yerda esa aksincha, doimiy menyu o'rnatiladi.
 	welcome := tg.NewMessage(chat, "Ishchi Bormi — kunlik ish toping va arizalaringizni shu botda boshqaring.\n\nPastdagi tugmalar doim shu yerda turadi — buyruqlarni eslab qolish shart emas.")
@@ -55,11 +56,52 @@ func (e *Engine) workerHome(chat int64) error {
 	if _, err := e.Bot.Send(welcome); err != nil {
 		return err
 	}
-	return e.miniAppMessage(chat, "Kerakli bo'limni tanlang:",
+	if err := e.miniAppMessage(chat, "Kerakli bo'limni tanlang:",
 		tg.NewInlineKeyboardRow(tg.NewInlineKeyboardButtonData("📍 Yaqin ishlarni topish", "jobs:start")),
 		tg.NewInlineKeyboardRow(workerButton("📋 Arizalarim", "apps", "all"), workerButton("✅ Qabul qilingan ishlar", "apps", "accepted")),
 		tg.NewInlineKeyboardRow(workerButton("📨 Kelgan arizalar", "inbox", "pending"), tg.NewInlineKeyboardButtonURL("Mening e'lonlarim", strings.TrimRight(e.WebURL, "/")+"/my-elons")),
-		tg.NewInlineKeyboardRow(workerButton("📝 Ro'yxatdan o'tish", "register", "new"), workerButton("ℹ️ Qanday ishlaydi?", "help", "")))
+		tg.NewInlineKeyboardRow(workerButton("ℹ️ Qanday ishlaydi?", "help", ""))); err != nil {
+		return err
+	}
+	return e.offerRegistration(ctx, d)
+}
+
+// offerRegistration hisobi hali YO'Q foydalanuvchiga ro'yxatdan o'tishni
+// taklif qiladi.
+//
+// NEGA DOIMIY TUGMA EMAS: ro'yxatdan o'tgan odam uchun bunday tugma
+// shunchaki shovqin — u nima qilishini tushunmaydi yoki ikkinchi hisob
+// ochmoqchimi deb o'ylaydi. Shuning uchun holatni bot o'zi aniqlaydi:
+// imzolangan sessiya so'rovi `contact_required` qaytarsa, hisob hali yo'q.
+//
+// Taklifda uchala yo'l — bot, Android ilova va sayt — birga ko'rsatiladi:
+// hisob uchalasida bitta, ya'ni qaysi biri qulay bo'lsa o'shanisi tanlanadi.
+//
+// Xato bo'lsa (tarmoq, 5xx) taklif jimgina o'tkazib yuboriladi: bosh menyu
+// allaqachon yuborilgan va u hisobsiz ham ishlaydi.
+func (e *Engine) offerRegistration(ctx context.Context, d *Draft) error {
+	if d.Registered {
+		return nil
+	}
+	if _, err := e.API.Login(ctx, d.ChatID, ""); err != nil {
+		if errorCode(err) != "contact_required" {
+			return nil
+		}
+		text := "Hisobingiz hali ochilmagan.\n\n" +
+			"Ro'yxatdan o'tsangiz ishga ariza yubora olasiz, arizangiz holatini kuzatasiz va belgilagan hududingizda yangi ish chiqqanda bot o'zi xabar beradi.\n\n" +
+			"Ish qidirish uchun esa ro'yxatdan o'tish shart emas — «📍 Ish topish» hammaga ochiq.\n\n" +
+			"Hisob uchala joyda bitta: shu yerda ochsangiz, saytga ham, Android ilovaga ham o'sha raqam bilan kirasiz."
+		return e.workerMessage(d.ChatID, text,
+			tg.NewInlineKeyboardRow(workerButton("📝 Shu yerda ro'yxatdan o'tish", "register", "new")),
+			tg.NewInlineKeyboardRow(
+				tg.NewInlineKeyboardButtonURL("📱 Android ilova", androidAppURL),
+				tg.NewInlineKeyboardButtonURL("🌐 Sayt", strings.TrimRight(e.WebURL, "/")+"/login")))
+	}
+	// Faqat kesh: yozilmasa ham bot to'g'ri ishlaydi, shuning uchun xato
+	// bosh menyuni muvaffaqiyatsiz deb ko'rsatmaydi.
+	d.Registered = true
+	_ = e.Store.Save(ctx, d)
+	return nil
 }
 
 // registrationDone ro'yxatdan o'tish oqimining yakuniy xabari.
@@ -152,7 +194,7 @@ func (e *Engine) handleWorker(ctx context.Context, u tg.Update, d *Draft) (bool,
 				return true, err
 			}
 			if cmd == "cancel" {
-				return true, e.workerHome(d.ChatID)
+				return true, e.workerHome(ctx, d)
 			}
 		}
 		return false, nil
@@ -184,7 +226,7 @@ func (e *Engine) handleWorker(ctx context.Context, u tg.Update, d *Draft) (bool,
 		if action == "post" {
 			return true, e.miniAppMessage(d.ChatID, "E'lon berish uchun Mini App'ni oching.")
 		}
-		return true, e.workerHome(d.ChatID)
+		return true, e.workerHome(ctx, d)
 	}
 	if action == "job" || action == "jobtext" {
 		if !validWorkerID(id) {
@@ -234,7 +276,7 @@ func (e *Engine) handleWorker(ctx context.Context, u tg.Update, d *Draft) (bool,
 			return true, e.say(d.ChatID, "Manzil noto'g'ri. /menu orqali davom eting.")
 		}
 	default:
-		return true, e.workerHome(d.ChatID)
+		return true, e.workerHome(ctx, d)
 	}
 	d.Worker = f
 	if err := e.saveWorker(ctx, d, u.UpdateID); err != nil {

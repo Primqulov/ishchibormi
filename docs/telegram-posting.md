@@ -43,10 +43,18 @@ Telegram yopishdan oldin tasdiq so'raydi.
 
 ## Ro'yxatdan o'tish
 
-`/register` yoki menyudagi **Ro'yxatdan o'tish** hisob ochishning mustaqil
-yo'li. Ilgari hisob faqat yo'l-yo'lakay — ariza berish ichida — yaratilardi,
-ya'ni «avval ro'yxatdan o'tay, ishni keyin qidiraman» degan odam saytga
-o'tishga majbur edi.
+`/register` hisob ochishning mustaqil yo'li. Ilgari hisob faqat
+yo'l-yo'lakay — ariza berish ichida — yaratilardi, ya'ni «avval ro'yxatdan
+o'tay, ishni keyin qidiraman» degan odam saytga o'tishga majbur edi.
+
+Doimiy tugma ATAYLAB yo'q. Bosh menyu ochilganda bot imzolangan sessiya
+so'rovi bilan holatni tekshiradi va **faqat hisobi yo'q** odamga taklif
+yuboradi: shu yerda ro'yxatdan o'tish, Android ilova va sayt — uchala yo'l
+birga, chunki hisob uchalasida bitta. Ro'yxatdan o'tgan odamga taklif
+umuman chiqmaydi va natija draft'da keshlanadi, ya'ni menyu har ochilganda
+qayta so'rov ketmaydi. Faqat ijobiy natija keshlanadi: hisobi yo'q odam
+keyingi daqiqada ochishi mumkin. Tekshiruv yiqilsa (tarmoq, 5xx) taklif
+jimgina o'tkazib yuboriladi — bosh menyu hisobsiz ham to'liq ishlaydi.
 
 Qadamlar ariza oqimidagi bilan ayni: foydalanish shartlariga rozilik,
 Telegram orqali **o'z** raqamini ulashish (boshqa odamning kontakti yoki

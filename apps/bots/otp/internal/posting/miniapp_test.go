@@ -40,11 +40,18 @@ func hasMiniAppButton(h *harness) bool {
 }
 
 func TestPostAndMenuUseNativeMiniAppButton(t *testing.T) {
-	for _, command := range []string{"/start", "/menu", "/post", "/start post", "/preview", "/back"} {
-		t.Run(command, func(t *testing.T) {
+	// Bosh menyu (/start, /menu) ro'yxatdan o'tilganini bilish uchun BITTA
+	// sessiya so'rovi yuboradi — taklif faqat hisobi yo'qlarga chiqadi
+	// (worker.go: offerRegistration). E'lon berish yo'llari esa hech qanday
+	// autentifikatsiya qilmaydi: forma butunlay Mini App ichida.
+	for _, tc := range []struct {
+		command string
+		logins  int
+	}{{"/start", 1}, {"/menu", 1}, {"/post", 0}, {"/start post", 0}, {"/preview", 0}, {"/back", 0}} {
+		t.Run(tc.command, func(t *testing.T) {
 			h := setup(t)
-			h.text(command)
-			if !hasMiniAppButton(h) || h.a.published != 0 || h.a.logins != 0 || h.s.draft.Step != "menu" {
+			h.text(tc.command)
+			if !hasMiniAppButton(h) || h.a.published != 0 || h.a.logins != tc.logins || h.s.draft.Step != "menu" {
 				t.Fatal("posting still starts chat form instead of Mini App")
 			}
 		})

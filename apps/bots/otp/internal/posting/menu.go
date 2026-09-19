@@ -16,6 +16,11 @@ import (
 // qolish shart emas. Tugma bosilganda oddiy matn keladi — cmd/bot/main.go uni
 // KeyboardCommand orqali buyruqqa aylantiradi, shuning uchun qolgan mantiq
 // o'zgarishsiz qoladi.
+// Android ilovasining Play Store manzili. Yagona manba —
+// apps/web/lib/contact.ts (APP_PACKAGE); paket nomi o'zgarsa ikkalasi ham
+// yangilanishi kerak.
+const androidAppURL = "https://play.google.com/store/apps/details?id=uz.ishchibormi.app"
+
 const (
 	btnFindJobs = "📍 Ish topish"
 	btnMyApps   = "📋 Arizalarim"
@@ -27,8 +32,7 @@ const (
 func MainKeyboard() tg.ReplyKeyboardMarkup {
 	kb := tg.NewReplyKeyboard(
 		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnFindJobs), tg.NewKeyboardButton(btnMyApps)),
-		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnPostJob), tg.NewKeyboardButton(btnRegister)),
-		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnHelp)),
+		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnPostJob), tg.NewKeyboardButton(btnHelp)),
 	)
 	kb.ResizeKeyboard = true
 	return kb
@@ -45,6 +49,10 @@ func KeyboardCommand(text string) string {
 	case btnPostJob:
 		return "post"
 	case btnRegister:
+		// Tugma endi klaviaturada YO'Q: ro'yxatdan o'tish taklifi faqat hisobi
+		// bo'lmaganlarga chiqadi (worker.go: offerRegistration). Moslik uchun
+		// qoldirilgan — Telegram eski klaviaturani yangi xabargacha ko'rsatib
+		// turadi, ya'ni eski tugma hali bosilishi mumkin.
 		return "register"
 	case btnHelp:
 		return "help"

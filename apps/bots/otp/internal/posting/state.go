@@ -55,7 +55,12 @@ type Draft struct {
 	PhotoDocuments []bool
 	PublishedID    string
 	Worker         *WorkerFlow
-	UpdatedAt      time.Time `bson:"updatedAt"`
+	// Registered — hisob borligi bir marta tasdiqlangan. Ro'yxatdan o'tish
+	// taklifini takror chiqarmaslik va bosh menyu har ochilganda sessiya
+	// so'rovi yubormaslik uchun. FAQAT ijobiy natija keshlanadi: hisobi
+	// yo'q odam keyingi daqiqada ochishi mumkin.
+	Registered bool
+	UpdatedAt  time.Time `bson:"updatedAt"`
 
 	// Oxirgi muvaffaqiyatli /jobs qidiruvining joyi. Xotiradagi searchState
 	// bir soatda o'chadi, bu esa qoladi — takroriy qidiruvda foydalanuvchidan
