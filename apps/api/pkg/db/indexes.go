@@ -158,6 +158,21 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		// stek izini qoldira olardi.
 		{"error_samples", mongo.IndexModel{Keys: bson.D{{Key: "at", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(30 * 24 * 3600).SetName("at_ttl")}},
 		{"error_samples", mongo.IndexModel{Keys: bson.D{{Key: "fingerprint", Value: 1}, {Key: "at", Value: -1}}}},
+
+		// Kanalga chiqarish (internal/channelpost). Bot qaysi kanallarda
+		// administrator ekani reyestrda; fan-out har e'londa FAQAT faol
+		// yozuvlarni o'qiydi.
+		{"telegram_channels", mongo.IndexModel{Keys: bson.D{{Key: "status", Value: 1}}}},
+		// (e'lon, kanal) juftligi UNIKAL: uzilgan fan-out qayta ishlaganda
+		// ham bitta kanalga ikkinchi post yaratilmaydi. Takroriy postning
+		// oldini olish aynan shu indeksga tayanadi.
+		{"channel_posts", mongo.IndexModel{Keys: bson.D{{Key: "elonId", Value: 1}, {Key: "chatId", Value: 1}}, Options: options.Index().SetUnique(true)}},
+		// Navbat tanlovi: status + navbatdagi vaqt bo'yicha eng eskisi.
+		{"channel_posts", mongo.IndexModel{Keys: bson.D{{Key: "status", Value: 1}, {Key: "nextAttemptAt", Value: 1}}}},
+		// Uzilib qolgan lizinglarni tozalash (status=sending, leaseUntil<now).
+		{"channel_posts", mongo.IndexModel{Keys: bson.D{{Key: "status", Value: 1}, {Key: "leaseUntil", Value: 1}}}},
+		// Fan-out kutayotgan e'lonlar. Sparse: belgisi bor e'lonlar oz.
+		{"elons", mongo.IndexModel{Keys: bson.D{{Key: "telegramBroadcast.status", Value: 1}, {Key: "telegramBroadcast.queuedAt", Value: 1}}, Options: options.Index().SetSparse(true)}},
 	}
 	for _, s := range specs {
 		if _, err := db.Collection(s.coll).Indexes().CreateOne(ctx, s.idx); err != nil {

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/ishchibormi/bot/internal/channels"
 	"github.com/ishchibormi/bot/internal/envfile"
 	"github.com/ishchibormi/bot/internal/posting"
 	"go.mongodb.org/mongo-driver/bson"
@@ -128,8 +129,43 @@ func main() {
 		}
 	}
 
+	// Kanal reyestri: bot qaysi kanallarda administrator ekanini shu yerda
+	// yozib boradi, backend esa undan o'qib yangi e'lonlarni yuboradi
+	// (apps/api/internal/channelpost).
+	channelRegistry := channels.New(mc.Database(dbName).Collection("telegram_channels"))
+	handleMembership := func(ctx context.Context, u tgbotapi.Update) {
+		event, ok := channels.FromUpdate(u)
+		if !ok {
+			return
+		}
+		mctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		active, err := channelRegistry.Apply(mctx, event)
+		if err != nil {
+			log.Printf("channel registry not updated (chat=%d)", event.ChatID)
+			return
+		}
+		if !active {
+			log.Printf("channel no longer receives listings (chat=%d)", event.ChatID)
+			return
+		}
+		log.Printf("channel receives listings (chat=%d)", event.ChatID)
+		// Tasdiq ayni kanalga yoziladi: kanal egasi ulanganini darhol
+		// ko'radi va bu xabar joylash huquqi haqiqatan borligini isbotlaydi.
+		hello := tgbotapi.NewMessage(event.ChatID, "✅ Ishchi Bormi ulandi.\n\nBundan keyin saytda, mobil ilovada yoki botda joylangan har bir yangi ish e'loni shu kanalga chiqadi.\n\nTo'xtatish uchun botni kanal administratorlaridan chiqaring.")
+		hello.DisableWebPagePreview = true
+		if _, err := bot.Send(hello); err != nil {
+			log.Printf("channel greeting not delivered (chat=%d)", event.ChatID)
+		}
+	}
+
 	upd := tgbotapi.NewUpdate(0)
 	upd.Timeout = 30
+	// ATAYLAB aniq ro'yxat. my_chat_member standart to'plamda bor, lekin
+	// ro'yxat bir marta boshqacha o'rnatilgan bo'lsa (masalan webhook bilan)
+	// u saqlanib qoladi va kanalga qo'shilish hodisasi kelmay qo'yardi.
+	// Bot faqat shu uchtasini o'qiydi — qolgani bekorga trafik.
+	upd.AllowedUpdates = []string{"message", "callback_query", "my_chat_member"}
 	updates := bot.GetUpdatesChan(upd)
 	go func() {
 		<-ctx.Done()
@@ -264,7 +300,7 @@ func main() {
 			}
 		}
 	}
-	dispatchUpdates(ctx, updates, handleUpdates)
+	dispatchUpdates(ctx, updates, handleUpdates, handleMembership)
 }
 
 // asCommand xabarni Telegram buyrug'iga aylantiradi: IsCommand()/Command()

@@ -77,7 +77,7 @@ func TestBotPublicationSourceAuthenticatesExactBodyAndRestoresIt(t *testing.T) {
 func TestChannelEnqueuedAtomicallyForNewListingsFromEveryClient(t *testing.T) {
 	db := ownerTestDB(t)
 	h := &Handler{Col: db.Collection("elons"), Users: db.Collection("users"), Categories: db.Collection("categories")}
-	p, err := channelpost.New(db, tgsend.New("test-only-no-network"), "@jobs_test", "testbot", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	p, err := channelpost.New(db, tgsend.New("test-only-no-network"), "testbot", "", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,14 +154,14 @@ func TestChannelEnqueuedAtomicallyForNewListingsFromEveryClient(t *testing.T) {
 				t.Fatal(err)
 			}
 			wantQueued := !tc.review && !tc.disabled
-			if (saved.TelegramChannel != nil) != wantQueued {
-				t.Fatalf("channel queue: got %+v, want queued=%t", saved.TelegramChannel, wantQueued)
+			if (saved.TelegramBroadcast != nil) != wantQueued {
+				t.Fatalf("channel queue: got %+v, want queued=%t", saved.TelegramBroadcast, wantQueued)
 			}
-			if wantQueued && (saved.TelegramChannel.Status != "pending" || saved.TelegramChannel.Reference != "@jobs_test" || saved.TelegramChannel.BotUsername != "testbot") {
-				t.Fatalf("incorrect destination/state: %+v", saved.TelegramChannel)
+			if wantQueued && saved.TelegramBroadcast.Status != "pending" {
+				t.Fatalf("incorrect queue state: %+v", saved.TelegramBroadcast)
 			}
 			if tc.retryable {
-				if _, err := h.Col.UpdateOne(context.Background(), bson.M{"_id": result.ID}, bson.M{"$set": bson.M{"telegramChannel.status": "sent", "telegramChannel.messageId": 123}}); err != nil {
+				if _, err := h.Col.UpdateOne(context.Background(), bson.M{"_id": result.ID}, bson.M{"$set": bson.M{"telegramBroadcast.status": "queued", "telegramBroadcast.channels": 3}}); err != nil {
 					t.Fatal(err)
 				}
 				retry := call()
@@ -175,7 +175,7 @@ func TestChannelEnqueuedAtomicallyForNewListingsFromEveryClient(t *testing.T) {
 				if err := h.Col.FindOne(context.Background(), bson.M{"_id": result.ID}).Decode(&saved); err != nil {
 					t.Fatal(err)
 				}
-				if saved.TelegramChannel.Status != "sent" || saved.TelegramChannel.MessageID != 123 {
+				if saved.TelegramBroadcast.Status != "queued" || saved.TelegramBroadcast.Channels != 3 {
 					t.Fatal("retry reenqueued channel post")
 				}
 			}

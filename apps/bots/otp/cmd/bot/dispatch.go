@@ -9,7 +9,7 @@ import (
 
 // Bound concurrency while preserving per-chat order. A photo upload or
 // moderation request must not pause every user's OTP/login conversation.
-func dispatchUpdates(ctx context.Context, updates <-chan tg.Update, run func(<-chan tg.Update)) {
+func dispatchUpdates(ctx context.Context, updates <-chan tg.Update, run func(<-chan tg.Update), membership func(context.Context, tg.Update)) {
 	const workers = 16
 	queues := make([]chan tg.Update, workers)
 	var wg sync.WaitGroup
@@ -31,6 +31,16 @@ func dispatchUpdates(ctx context.Context, updates <-chan tg.Update, run func(<-c
 		case u, ok := <-updates:
 			if !ok {
 				return
+			}
+			// Kanalga qo'shilish/chiqarilish ATAYLAB navbatlardan tashqarida
+			// ishlanadi: privateSender bunday update uchun 0 qaytaradi va u
+			// quyida jimgina tashlab yuborilardi. Hodisa kamdan-kam, ya'ni
+			// dispatch tsiklini sezilarli ushlab turmaydi.
+			if u.MyChatMember != nil {
+				if membership != nil {
+					membership(ctx, u)
+				}
+				continue
 			}
 			id := privateSender(u)
 			if id <= 0 {

@@ -447,10 +447,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		ModerationPending: modSkipped,
 	}
 	// Every client creates listings through this handler. Save the channel
-	// queue atomically with the new listing, regardless of its source.
-	// Store-review demo data stays private; Pending is nil when disabled.
+	// queue marker atomically with the new listing, regardless of its source.
+	// Store-review demo data stays private; Queued is nil when disabled.
+	// Belgi bitta — kanallar ro'yxati fan-out bosqichida o'qiladi, ya'ni
+	// e'lon yaratish tezligi kanallar soniga bog'liq emas.
 	if !e.IsReviewData {
-		e.TelegramChannel = h.Channel.Pending(now)
+		e.TelegramBroadcast = h.Channel.Queued(now)
 	}
 	if err := elonimages.Reserve(r.Context(), h.Col.Database(), h.Storage, e.ID, uid, e.Images); err != nil {
 		httpx.Err(w, err)

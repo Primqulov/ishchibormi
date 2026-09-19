@@ -272,8 +272,8 @@ type Elon struct {
 	//
 	// json:"-" ataylab: foydalanuvchi tekshiruv o'tkazib yuborilganini
 	// bilmasligi kerak.
-	ModerationPending bool                `bson:"moderationPending,omitempty" json:"-"`
-	TelegramChannel   *ChannelPublication `bson:"telegramChannel,omitempty" json:"-"`
+	ModerationPending bool              `bson:"moderationPending,omitempty" json:"-"`
+	TelegramBroadcast *ChannelBroadcast `bson:"telegramBroadcast,omitempty" json:"-"`
 	// Denormalized moderation flag so public feed/sitemap queries can hide all
 	// listings immediately when an owner is blocked without an expensive join.
 	OwnerBlocked bool       `bson:"ownerBlocked,omitempty" json:"-"`

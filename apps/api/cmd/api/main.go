@@ -203,7 +203,10 @@ func main() {
 	accountH := account.NewHandler(cfg, mdb, s3svc)
 	catH := category.NewHandler(mdb)
 	elonH := elon.NewHandler(mdb, s3svc, notif)
-	channelPublisher, channelErr := channelpost.New(mdb, tgsend.New(cfg.TelegramBotToken), cfg.TelegramJobsChannelID, cfg.TelegramBotUsername, log)
+	// Kanalga chiqarish endi sozlangan bitta kanalga emas, bot administrator
+	// bo'lgan BARCHA kanallarga ishlaydi. TelegramJobsChannelID faqat eski
+	// sozlamani reyestrga kiritish uchun (ixtiyoriy).
+	channelPublisher, channelErr := channelpost.New(mdb, tgsend.New(cfg.TelegramBotToken), cfg.TelegramBotUsername, cfg.TelegramJobsChannelID, log)
 	if channelErr != nil {
 		log.Warn("channel publication disabled", "reason", channelErr.Error())
 	} else if channelPublisher != nil {

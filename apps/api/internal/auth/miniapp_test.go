@@ -134,7 +134,7 @@ func assertMiniAppPosting(t *testing.T, auth *Handler, token string, owner primi
 	ctx := context.Background()
 	db := auth.Users().Database()
 	jobs := elon.NewHandler(db, nil, nil)
-	channel, err := channelpost.New(db, tgsend.New("test-no-network"), "@miniapp_test", "miniappbot", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	channel, err := channelpost.New(db, tgsend.New("test-no-network"), "miniappbot", "", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func assertMiniAppPosting(t *testing.T, auth *Handler, token string, owner primi
 	if err := jobs.Col.FindOne(ctx, bson.M{"_id": first.ID}).Decode(&saved); err != nil {
 		t.Fatal(err)
 	}
-	if saved.TelegramChannel == nil || saved.TelegramChannel.Status != "pending" || saved.TelegramChannel.Reference != "@miniapp_test" {
+	if saved.TelegramBroadcast == nil || saved.TelegramBroadcast.Status != "pending" {
 		t.Fatal("Mini App listing did not enter the shared channel queue")
 	}
 }

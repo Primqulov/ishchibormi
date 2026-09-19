@@ -1,13 +1,32 @@
-# Yangi ish e'lonlarini Telegram kanaliga chiqarish
+# Yangi ish e'lonlarini Telegram kanallariga chiqarish
 
 Web, iOS, Android yoki Telegram bot orqali muvaffaqiyatli joylangan har bir
-yangi ish avtomatik ravishda bitta sozlangan kanalga yuboriladi. Bu e'lon foydalanuvchilarning shaxsiy bot
-chatlariga tarqatilmaydi. Ishga ariza berish, qabul qilish va bekor qilishga
-oid mavjud shaxsiy bildirishnomalar bundan mustaqil ishlaydi.
+yangi ish, bot **administrator bo'lgan barcha kanallarga** avtomatik
+yuboriladi. Bu e'lon foydalanuvchilarning shaxsiy bot chatlariga
+tarqatilmaydi. Ishga ariza berish, qabul qilish va bekor qilishga oid mavjud
+shaxsiy bildirishnomalar bundan mustaqil ishlaydi.
 
-Kanal posti botdagi suhbatdan forward qilinmaydi. Alohida `sendMessage` orqali
-kanal posti yaratiladi; ovozli bildirishnoma va havola preview si o'chirilgan.
-Kanalda to'liq tavsif, aloqa telefoni va aniq xarita chiqarilmaydi.
+Kanal posti botdagi suhbatdan forward qilinmaydi. Alohida `sendMessage`
+orqali kanal posti yaratiladi; ovozli bildirishnoma va havola preview si
+o'chirilgan. Kanalda to'liq tavsif, aloqa telefoni va aniq xarita
+chiqarilmaydi.
+
+## Kanalni ulash
+
+1. O'z kanalingizga ishlatilayotgan botni **administrator** qiling.
+2. Unga **Post Messages / Xabar joylash** huquqini bering.
+
+Tamom. Bot ulanganini kanalga bitta xabar bilan tasdiqlaydi va o'sha
+paytdan boshlab **yangi** e'lonlar shu kanalga chiqadi. Hech qanday sozlama,
+so'rov yoki tasdiqlash kerak emas — botni kim o'z kanaliga qo'shsa, o'sha
+kanal e'lonlarni oladi.
+
+**To'xtatish:** botni kanal administratorlaridan chiqaring. Bot buni darhol
+qayd etadi va navbatdagi eski postlar ham yuborilmaydi.
+
+Huquqsiz administrator e'lon yubora olmaydi, shuning uchun "Post Messages"
+berilmagan kanal faol hisoblanmaydi. Guruh va superguruhlar ataylab qabul
+qilinmaydi: e'lonlar oqimi suhbatni bosib ketardi.
 
 ## Kanal posti namunasi
 
@@ -29,6 +48,12 @@ Tugma `https://t.me/<bot_username>?start=job_<elon_id>` manzilini ochadi.
 Telegram botni birinchi marta ochayotgan foydalanuvchidan **Start / Boshlash**ni
 bosishni talab qilishi mumkin. Shundan keyin bot shu e'lonni darhol ochadi;
 qidiruv yoki kirish kodi talab qilinmaydi.
+
+Havola bot nomiga quriladi, shuning uchun nom ishga tushishda BIR MARTA
+`getMe` bilan tekshiriladi: `TELEGRAM_BOT_USERNAME` token egasiga mos
+kelmasa, kanalga chiqarish umuman yoqilmaydi (noto'g'ri nom butun postni
+foydasiz qilardi). Har xabar oldidan tekshirish Telegram chegarasini
+bekorga yeb qo'yardi.
 
 ## Bot ichida
 
@@ -63,50 +88,95 @@ To'lgan yoki muddati tugagan ishga ariza tugmasi chiqarilmaydi. O'chirilgan,
 yashirilgan yoki ommaga yopilgan e'lon havolasi boshqa ish topish taklifini beradi.
 Kanal posti e'lon yaratilgan paytdagi qisqa ma'lumot; joriy joylar botda ko'rinadi.
 
-## Ulash
+## Qanday ishlaydi
 
-1. E'lonlar chiqadigan kanalga ishlatilayotgan botni administrator qiling.
-2. Botga **Post Messages / Xabar joylash** huquqini bering.
-3. Backend muhitida quyidagini sozlang:
+Uchta hujjat turi bor. Bitta e'lon endi N ta kanalga ketadi, ya'ni har
+birining natijasi alohida saqlanishi kerak.
 
-   ```dotenv
-   TELEGRAM_JOBS_CHANNEL_ID=@kanal_username
-   ```
+**`telegram_channels` — kanallar reyestri.** Uni **bot** yuritadi:
+Telegram kanalga qo'shilish/chiqarilish haqidagi `my_chat_member` update'ini
+faqat so'rab turgan jarayonga yuboradi. `_id` — kanalning Telegram chat ID si,
+ya'ni qayta qo'shilganda ayni yozuv tiklanadi va ikkinchi hujjat paydo
+bo'lmaydi. Holatlar: `active`, `inactive` (bot chiqarilgan yoki huquqi
+olingan), `blocked` (operator qo'lda to'xtatgan).
 
-   Yopiq kanal uchun `-100…` ID ishlatiladi. `TELEGRAM_BOT_TOKEN` va
-   `TELEGRAM_BOT_USERNAME` aynan bir botga tegishli bo'lishi kerak.
-4. Backendni qayta ishga tushiring. Keyin web, iOS, Android yoki botdan yangi e'lon bering.
+**`elons.telegramBroadcast` — e'lon hujjatidagi belgi.** E'lon bilan ayni
+`InsertOne` ichida yoziladi, ya'ni «e'lon yaratildi, lekin navbatga
+qo'yilmadi» holati bo'lmaydi. Kanallar ro'yxati bu yerda O'QILMAYDI —
+shuning uchun e'lon yaratish tezligi kanallar soniga bog'liq emas.
 
-Sozlama bo'sh bo'lsa kanalga yuborish o'chiq. Avvalgi e'lonlar orqadan
-tarqatilmaydi. Kanal sozlangandan keyin `POST /api/elons` orqali yaratilgan
-yangi e'lonlar manbasidan qat'i nazar navbatga olinadi. Alohida platforma
-headeri yoki bot imzosi kanalga yuborish uchun talab qilinmaydi; barcha
-so'rovlarda foydalanuvchi autentifikatsiyasi va e'lon tekshiruvlari saqlanadi.
-App Store / Google Play tekshiruvi uchun yaratilgan demo hisob e'lonlari
-kanalga chiqarilmaydi. E'lonni tahrirlash yangi kanal posti yaratmaydi.
+**`channel_posts` — har (e'lon, kanal) juftligi uchun bitta navbat yozuvi.**
+`(elonId, chatId)` bo'yicha **unikal** indeks bor: takroriy postning oldini
+olish aynan shunga tayanadi.
 
-Local test bot: `@ishchibormiauthtestbot`. Local ishga tushirish skriptlari
-`%TEMP%/ishchibormi-telegram-local/.env.telegram-test` faylini asosiy `.env`
-ustidan yuklaydi; test kanal sozlamasi shu override faylida saqlanishi mumkin.
+Fan-out worker belgisi `pending` bo'lgan e'lonni oladi, o'sha paytdagi faol
+kanallarni o'qiydi va har biriga navbat yozuvi yaratadi. **Keyin qo'shilgan
+kanal eski e'lonlarni olmaydi** — bu ataylab: yangi kanalga yuzlab eski
+e'lon to'kilib ketmasligi kerak. Fan-out faqat idempotent yozuv qiladi,
+shuning uchun uzilib qolgan urinish xavfsiz qaytariladi.
+
+Yetkazish worker'i navbatdan sekundiga 5 tagacha post yuboradi. Telegram
+umumiy chegarasi ~30 xabar/sekund, ya'ni zaxira bilan pastda turamiz.
 
 ## Yetkazish va qayta urinish
 
 Web, iOS, Android va bot bir xil backend e'lon yaratish jarayonidan foydalanadi.
 Botning so'rovida qo'shimcha HMAC imzo ham tekshiriladi, lekin kanalga yuborish
-bu imzoga bog'liq emas. Kanal navbati e'lonning o'z Mongo hujjatida
-`telegramChannel` sifatida atomar saqlanadi; oddiy foydalanuvchi bu ichki
-maydonni JSON orqali belgilay olmaydi. Bir xil `Idempotency-Key` bilan takroriy
-yaratish so'rovi ayni e'lonni qaytaradi va kanalga qaytadan navbatga qo'ymaydi.
+bu imzoga bog'liq emas. Bir xil `Idempotency-Key` bilan takroriy yaratish
+so'rovi ayni e'lonni qaytaradi va kanallarga qaytadan navbatga qo'ymaydi.
 
-Yuborishdan oldin e'lonning faol holati, bo'sh o'rin, kanal turi, botning haqiqiy
-username'i va kanalga yozish huquqi tekshiriladi. Foydalanuvchilar ro'yxati
-o'qilmaydi va yangi e'lon uchun shaxsiy chatga xabar yuborilmaydi.
+Yuborishdan oldin e'lonning faol holati, bo'sh o'rin va kanalning hali
+faolligi tekshiriladi. Foydalanuvchilar ro'yxati o'qilmaydi va yangi e'lon
+uchun shaxsiy chatga xabar yuborilmaydi.
 
-`sent` holatida kanal ID va Telegram message ID saqlanadi. Telegramning aniq
-429 javobidan keyin belgilangan muddat kutib qayta urinish mumkin. `sendMessage`
-uchun Telegram idempotency kaliti bermaydi: timeout yoki uzilishda xabar yetib
-borgan-bormagani noma'lum bo'lsa, takroriy post chiqarmaslik uchun `uncertain`
-holatiga o'tiladi. Operator `elons.telegramChannel` va backend jurnalidan e'lon
-ID si bo'yicha natijani tekshiradi; bunday xabar avtomatik qayta yuborilmaydi.
-`failed` — aniq rad etilgan, `skipped` — yuborilguncha ish yopilgan/to'lgan.
-Kanal manzili almashtirilsa eski navbat yangi kanalga yo'naltirilmaydi.
+`sent` holatida Telegram message ID saqlanadi. Telegramning aniq 429
+javobidan keyin belgilangan muddat kutib qayta urinish mumkin. `sendMessage`
+uchun Telegram idempotency kaliti bermaydi: timeout yoki uzilishda xabar
+yetib borgan-bormagani noma'lum bo'lsa, takroriy post chiqarmaslik uchun
+`uncertain` holatiga o'tiladi. Operator `channel_posts` va backend
+jurnalidan e'lon ID si bo'yicha natijani tekshiradi; bunday xabar avtomatik
+qayta yuborilmaydi. `failed` — aniq rad etilgan, `skipped` — yuborilguncha
+ish yopilgan/to'lgan yoki kanal uzilgan.
+
+Aniq rad javobi (4xx) kelgan kanal darhol `inactive` qilinadi: bot
+chiqarilgan yoki kanal o'chirilgan bo'lsa, har yangi e'lon shu xatoni
+qaytarib navbatni bekorga band qilib turardi.
+
+## Suiiste'mol va nazorat
+
+Botni istagan odam o'z kanaliga qo'sha oladi — bu ataylab shunday, chunki
+e'lonlar ommaviy ma'lumot va har bir kanal qo'shimcha tarqatish kanali.
+Kanal faqat e'lonning qisqa ma'lumotini oladi: telefon, to'liq tavsif va
+aniq manzil kanalga chiqmaydi.
+
+Muayyan kanalni butunlay uzish kerak bo'lsa, `telegram_channels` dagi
+yozuvga `status: "blocked"` qo'ying. Kod bu holatni hech qachon o'zgartirmaydi:
+bot o'sha kanalga qayta qo'shilsa ham yozuv `blocked` bo'lib qoladi.
+
+## Eski sozlama
+
+`TELEGRAM_JOBS_CHANNEL_ID` endi ixtiyoriy va faqat bitta holat uchun kerak:
+bot **allaqachon a'zo** bo'lgan kanal. Telegram mavjud a'zolik uchun
+`my_chat_member` yubormaydi, ya'ni bunday kanal o'z-o'zidan reyestrga
+tushmaydi. Kalit qo'yilgan bo'lsa API ishga tushganda uni bir marta qayd
+etadi. Yangi kanallar uchun bu kalit kerak emas.
+
+App Store / Google Play tekshiruvi uchun yaratilgan demo hisob e'lonlari
+kanallarga chiqarilmaydi. E'lonni tahrirlash yangi kanal posti yaratmaydi.
+
+Local test bot: `@ishchibormiauthtestbot`.
+
+## Tekshirish
+
+```sh
+cd apps/api
+go test ./internal/channelpost ./internal/elon ./internal/auth
+cd ../bots/otp
+go test ./internal/channels ./cmd/bot
+```
+
+Testlar bir nechta kanalga fan-out, takroriy postning oldini olish, faqat
+faol kanallarga yuborish, yangi kanalga eski e'lonlarni yubormaslik,
+noaniq yetkazishni qayta urinmaslik, rad etgan kanalni uzish, bloklangan
+kanalni tiklamaslik va faqat kanal a'zoligini qabul qilishni qamraydi.
+Mongo integratsiya testlari alohida test bazalarini yaratib tozalaydi.

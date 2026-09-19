@@ -24,18 +24,47 @@ type ChannelInfo struct {
 	BotUsername string
 }
 
-// ResolveChannel is read-only. Never publish to a group or private chat even
-// if a valid Telegram chat ID was mistakenly entered in channel configuration.
-func (c *Client) ResolveChannel(ctx context.Context, ref string) (ChannelInfo, error) {
-	if !ValidChannelReference(ref) {
-		return ChannelInfo{}, &APIError{Code: 400, Reason: "invalid_channel"}
+// BotUsername tokenga tegishli botning @nomini qaytaradi.
+//
+// Kanal posti tugmasi `t.me/<bot>?start=job_<id>` havolasiga quriladi, ya'ni
+// noto'g'ri nom butun postni foydasiz qiladi. Nom ishga tushishda BIR MARTA
+// tekshiriladi — har xabar oldidan getMe chaqirish Telegram chegarasini
+// bekorga yeydi.
+func (c *Client) BotUsername(ctx context.Context) (string, error) {
+	me, err := c.identity(ctx)
+	if err != nil {
+		return "", err
 	}
+	return me.Username, nil
+}
+
+func (c *Client) identity(ctx context.Context) (struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	IsBot    bool   `json:"is_bot"`
+}, error) {
 	var me struct {
 		ID       int64  `json:"id"`
 		Username string `json:"username"`
 		IsBot    bool   `json:"is_bot"`
 	}
 	if err := c.channelCall(ctx, "getMe", map[string]any{}, &me); err != nil {
+		return me, err
+	}
+	if !me.IsBot || !ValidBotUsername(me.Username) {
+		return me, &APIError{Code: 400, Reason: "not_a_bot"}
+	}
+	return me, nil
+}
+
+// ResolveChannel is read-only. Never publish to a group or private chat even
+// if a valid Telegram chat ID was mistakenly entered in channel configuration.
+func (c *Client) ResolveChannel(ctx context.Context, ref string) (ChannelInfo, error) {
+	if !ValidChannelReference(ref) {
+		return ChannelInfo{}, &APIError{Code: 400, Reason: "invalid_channel"}
+	}
+	me, err := c.identity(ctx)
+	if err != nil {
 		return ChannelInfo{}, err
 	}
 	var chat struct {
@@ -45,7 +74,7 @@ func (c *Client) ResolveChannel(ctx context.Context, ref string) (ChannelInfo, e
 	if err := c.channelCall(ctx, "getChat", map[string]any{"chat_id": ref}, &chat); err != nil {
 		return ChannelInfo{}, err
 	}
-	if chat.Type != "channel" || chat.ID >= 0 || !me.IsBot || !ValidBotUsername(me.Username) {
+	if chat.Type != "channel" || chat.ID >= 0 {
 		return ChannelInfo{}, &APIError{Code: 400, Reason: "not_a_channel"}
 	}
 	var member struct {
