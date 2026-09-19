@@ -29,7 +29,7 @@ type Sender interface {
 	Configured() bool
 	BotUsername(context.Context) (string, error)
 	ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error)
-	SendChannelHTML(context.Context, int64, string, tgsend.Button) (int64, error)
+	SendChannelHTML(context.Context, int64, string, []tgsend.Button) (int64, error)
 }
 
 // Bitta tsiklda yuboriladigan post soni. Telegram umumiy chegarasi sekundiga
@@ -300,8 +300,8 @@ func (p *Publisher) deliverNext(parent context.Context) (bool, error) {
 	if p.channels.FindOne(ctx, bson.M{"_id": claimed.ChatID, "status": "active"}).Err() != nil {
 		return true, p.finish(ctx, claimed, "skipped", "channel_inactive", 0)
 	}
-	text, button := Message(live, p.botUsername)
-	id, err := p.sender.SendChannelHTML(ctx, claimed.ChatID, text, button)
+	text, buttons := Message(live, p.botUsername)
+	id, err := p.sender.SendChannelHTML(ctx, claimed.ChatID, text, buttons)
 	if err == nil && id > 0 {
 		p.channelDelivered(ctx, claimed.ChatID)
 		return true, p.finish(ctx, claimed, "sent", "", id)
@@ -360,7 +360,7 @@ func (p *Publisher) channelDelivered(ctx context.Context, chatID int64) {
 	_, _ = p.channels.UpdateOne(ctx, bson.M{"_id": chatID, "failures": bson.M{"$gt": 0}}, bson.M{"$set": bson.M{"failures": 0}})
 }
 
-func Message(e models.Elon, username string) (string, tgsend.Button) {
+func Message(e models.Elon, username string) (string, []tgsend.Button) {
 	title := []rune(strings.Join(strings.Fields(e.Title), " "))
 	if len(title) > 160 {
 		title = title[:160]
@@ -392,7 +392,30 @@ func Message(e models.Elon, username string) (string, tgsend.Button) {
 		text += "\n📍 " + tgsend.EscapeHTML(string(r))
 	}
 	text += "\n\nIsh haqida batafsil ma'lumot olish uchun pastdagi tugmani bosing."
-	return text, tgsend.Button{Text: "Ish haqida batafsil", URL: "https://t.me/" + username + "?start=job_" + e.ID.Hex()}
+	buttons := []tgsend.Button{{Text: "Ish haqida batafsil", URL: "https://t.me/" + username + "?start=job_" + e.ID.Hex()}}
+	// Xarita — ochiq ma'lumot: ish qayerdaligini bilmasdan unga borib
+	// bo'lmaydi va u botda ham, saytda ham allaqachon ko'rsatiladi. Aloqa
+	// telefoni, to'liq tavsif va ish beruvchi haqidagi ma'lumot esa
+	// kanalga ATAYLAB chiqmaydi: ularni ko'rish uchun odam botga o'tadi.
+	if mapURL := mapLink(e); mapURL != "" {
+		buttons = append(buttons, tgsend.Button{Text: "🗺 Xaritada ochish", URL: mapURL})
+	}
+	return text, buttons
+}
+
+// mapLink e'lon koordinatalarining xarita havolasi. Koordinata yo'q bo'lsa
+// (eski e'lon yoki xaritasiz forma) bo'sh satr — tugma qo'shilmaydi.
+//
+// Manzil botdagi "Xaritada ochish" bilan bir xil shaklda quriladi, ya'ni
+// foydalanuvchi qayerdan bosishidan qat'i nazar ayni joyni ko'radi.
+func mapLink(e models.Elon) string {
+	if e.Lat == 0 && e.Lng == 0 {
+		return ""
+	}
+	if e.Lat < -90 || e.Lat > 90 || e.Lng < -180 || e.Lng > 180 {
+		return ""
+	}
+	return fmt.Sprintf("https://www.google.com/maps?q=%.6f,%.6f", e.Lat, e.Lng)
 }
 func money(value int64) string {
 	raw := fmt.Sprint(value)

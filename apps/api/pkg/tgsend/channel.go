@@ -92,9 +92,18 @@ func (c *Client) ResolveChannel(ctx context.Context, ref string) (ChannelInfo, e
 
 // A new channel post, not a forwarded private message. Silent delivery avoids
 // a notification sound for every listing; it does not suppress the channel post.
-func (c *Client) SendChannelHTML(ctx context.Context, channelID int64, text string, button Button) (int64, error) {
-	if channelID >= 0 || !button.Valid() {
+// Har bir tugma ALOHIDA qatorda: kanal posti telefonda o'qiladi va yonma-yon
+// turgan uzun yorliqlar qirqilib ketardi.
+func (c *Client) SendChannelHTML(ctx context.Context, channelID int64, text string, buttons []Button) (int64, error) {
+	if channelID >= 0 || len(buttons) == 0 {
 		return 0, &APIError{Code: 400, Reason: "invalid_channel_post"}
+	}
+	rows := make([][]inlineButton, 0, len(buttons))
+	for _, b := range buttons {
+		if !b.Valid() {
+			return 0, &APIError{Code: 400, Reason: "invalid_channel_post"}
+		}
+		rows = append(rows, []inlineButton{{Text: b.Text, URL: b.URL}})
 	}
 	payload := struct {
 		ChatID    int64          `json:"chat_id"`
@@ -103,7 +112,7 @@ func (c *Client) SendChannelHTML(ctx context.Context, channelID int64, text stri
 		Silent    bool           `json:"disable_notification"`
 		NoPreview bool           `json:"disable_web_page_preview"`
 		Markup    inlineKeyboard `json:"reply_markup"`
-	}{channelID, text, "HTML", true, true, inlineKeyboard{InlineKeyboard: [][]inlineButton{{{Text: button.Text, URL: button.URL}}}}}
+	}{channelID, text, "HTML", true, true, inlineKeyboard{InlineKeyboard: rows}}
 	var result struct {
 		MessageID int64 `json:"message_id"`
 	}

@@ -81,9 +81,12 @@ ixtiyoriy — «quva» ham «Quva tumani» ni topadi. Ro'yxatda yo'q nom qabul
 qilinmaydi, ya'ni profilga ixtiyoriy matn tushmaydi. Viloyat almashtirilsa
 oldin tanlangan tuman bekor qilinadi.
 
-**Familiya faqat ro'yxatdan o'tishda so'raladi.** Ariza berish oqimi uni
-so'ramaydi: mavjud hisoblarning ko'pida familiya yo'q va uni ish topish
-o'rtasida talab qilish odamni chalg'itardi.
+**Ayni to'rtta maydon ariza berishda ham talab qilinadi.** Ariza ish
+beruvchiga boradi va u kim kelayotganini hamda qayerdanligini biladigan
+bo'lishi kerak; chala profil bilan yuborilgan ariza unga "kimdir" dan iborat
+bo'lib qolardi. Kanaldagi e'lonni ochib darhol ariza bermoqchi bo'lgan
+ro'yxatdan o'tmagan odam avval shu qadamlardan o'tadi — hammasi botning
+o'zida, Mini App yoki saytga o'tmasdan.
 
 Tasdiq bosqichi yo'q: ro'yxatdan o'tish hech kimga ma'lumot yubormaydi.
 Hisob allaqachon to'liq bo'lsa bot «allaqachon ro'yxatdan o'tgansiz» deb

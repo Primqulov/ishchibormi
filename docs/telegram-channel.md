@@ -8,8 +8,16 @@ shaxsiy bildirishnomalar bundan mustaqil ishlaydi.
 
 Kanal posti botdagi suhbatdan forward qilinmaydi. Alohida `sendMessage`
 orqali kanal posti yaratiladi; ovozli bildirishnoma va havola preview si
-o'chirilgan. Kanalda to'liq tavsif, aloqa telefoni va aniq xarita
-chiqarilmaydi.
+o'chirilgan.
+
+Postda ikkita tugma bo'ladi: **Ish haqida batafsil** (botda ochadi) va
+**🗺 Xaritada ochish** (ish koordinatasi). Xarita ATAYLAB chiqariladi — ish
+qayerdaligini bilmasdan unga borib bo'lmaydi va u botda ham, saytda ham
+allaqachon ko'rsatiladi. Koordinatasi yo'q e'londa (eski yozuv) tugma
+qo'shilmaydi: ishlamaydigan havoladan ko'ra yo'qligi ma'qul.
+
+Aloqa telefoni, to'liq tavsif, aniq manzil matni va ish beruvchi haqidagi
+ma'lumot kanalga CHIQMAYDI — ularni ko'rish uchun odam botga o'tadi.
 
 ## Kanalni ulash
 
@@ -43,8 +51,11 @@ qilinmaydi: e'lonlar oqimi suhbatni bosib ketardi.
 > Ish haqida batafsil ma'lumot olish uchun pastdagi tugmani bosing.
 >
 > **Ish haqida batafsil**
+> **🗺 Xaritada ochish**
 
-Tugma `https://t.me/<bot_username>?start=job_<elon_id>` manzilini ochadi.
+Birinchi tugma `https://t.me/<bot_username>?start=job_<elon_id>` manzilini
+ochadi, ikkinchisi esa ish koordinatasini xaritada ko'rsatadi (botdagi
+"Xaritada ochish" bilan ayni shaklda).
 Telegram botni birinchi marta ochayotgan foydalanuvchidan **Start / Boshlash**ni
 bosishni talab qilishi mumkin. Shundan keyin bot shu e'lonni darhol ochadi;
 qidiruv yoki kirish kodi talab qilinmaydi.

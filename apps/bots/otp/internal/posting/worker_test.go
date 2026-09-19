@@ -80,11 +80,17 @@ func TestWorkerApplyOwnContactProfileGroupAndConfirmation(t *testing.T) {
 	}
 	m.Contact.UserID = 42
 	h.send(m)
+	// Ariza yuborishdan OLDIN profil to'liq bo'lishi kerak: ism, familiya
+	// va yashash hududi. Hududlar yopiq ro'yxatdan tanlanadi.
 	h.text("Ali")
-	h.text("Toshkent")
-	h.text("Chilonzor")
-	if h.s.draft.Worker.Step != "people" || h.a.profile.FirstName != "Ali" {
-		t.Fatal("profile not saved")
+	h.text("Karimov")
+	h.flowClick("r0") // Toshkent shahri
+	h.flowClick("d1") // Chilonzor tumani
+	if h.s.draft.Worker.Step != "people" {
+		t.Fatalf("apply did not reach the group step: %+v", h.s.draft.Worker)
+	}
+	if h.a.profile.FirstName != "Ali" || h.a.profile.LastName != "Karimov" || h.a.profile.District != "Chilonzor tumani" {
+		t.Fatalf("profile not saved: %+v", h.a.profile)
 	}
 	h.text("4")
 	if h.s.draft.Worker.Step != "people" {
@@ -526,17 +532,25 @@ func TestDistrictListIsPaged(t *testing.T) {
 	}
 }
 
-// Ariza berish oqimi familiya SO'RAMAYDI: mavjud hisoblarning ko'pida u
-// yo'q va uni ish topish o'rtasida talab qilish chalg'itardi.
-func TestApplyDoesNotAskForTheLastName(t *testing.T) {
-	steps := profileSteps("apply", Profile{})
-	for _, s := range steps {
-		if s.step == "last_name" {
-			t.Fatal("apply flow asks for the last name")
+// Ariza ish beruvchiga boradi, ya'ni u kim kelayotganini va qayerdanligini
+// bilishi kerak — chala profil bilan ariza yuborib bo'lmaydi.
+func TestProfileIsRequiredInFullBeforeApplying(t *testing.T) {
+	want := []string{"first_name", "last_name", "region", "district"}
+	steps := profileSteps(Profile{})
+	if len(steps) != len(want) {
+		t.Fatalf("got %d steps, want %d: %+v", len(steps), len(want), steps)
+	}
+	for i, name := range want {
+		if steps[i].step != name {
+			t.Fatalf("step %d = %s, want %s", i, steps[i].step, name)
 		}
 	}
-	if len(profileSteps("register", Profile{})) != len(steps)+1 {
-		t.Fatal("registration does not add the last name step")
+	// To'lgan maydon qayta so'ralmaydi.
+	full := profileSteps(Profile{FirstName: "Ali", LastName: "Karimov", Region: "Toshkent shahri", District: "Chilonzor tumani"})
+	for _, s := range full {
+		if s.value == "" {
+			t.Fatalf("complete profile still reports %s as missing", s.step)
+		}
 	}
 }
 
@@ -581,5 +595,55 @@ func TestRegistrationNeverOpensTheMiniApp(t *testing.T) {
 	}
 	if hasMiniAppButton(h) {
 		t.Fatal("a Mini App button appeared during registration")
+	}
+}
+
+// Ro'yxatdan o'tmagan odam kanaldagi e'lonni ochib darhol ariza bera
+// olmaydi: avval hisob bog'lanadi va profil to'liq to'ldiriladi. Butun
+// jarayon chatda — Mini App ochilmaydi.
+func TestApplyingWithoutAnAccountRegistersInChatFirst(t *testing.T) {
+	h := workerSetup(t)
+	h.a.newUser = true
+	h.a.profile = Profile{ID: "worker"}
+
+	h.workerClick("apply", workerJobID)
+	if h.s.draft.Worker.Step != "consent" {
+		t.Fatal("apply skipped the account check")
+	}
+	h.flowClick("agree")
+	own := h.message("")
+	own.Contact = &tg.Contact{UserID: 42, PhoneNumber: "998901234567"}
+	h.send(own)
+
+	// Har bir yetishmagan maydon navbat bilan so'raladi va ularsiz ariza
+	// bosqichiga o'tib bo'lmaydi.
+	for _, step := range []string{"first_name", "last_name", "region", "district"} {
+		if h.s.draft.Worker.Step != step {
+			t.Fatalf("step = %s, want %s", h.s.draft.Worker.Step, step)
+		}
+		if h.a.applyCalls != 0 {
+			t.Fatal("application sent with an incomplete profile")
+		}
+		switch step {
+		case "first_name":
+			h.text("Ali")
+		case "last_name":
+			h.text("Karimov")
+		case "region":
+			h.flowClick("r0")
+		case "district":
+			h.flowClick("d1")
+		}
+	}
+	if h.s.draft.Worker.Step != "people" {
+		t.Fatalf("complete profile did not open the application: %+v", h.s.draft.Worker)
+	}
+	if hasMiniAppButton(h) {
+		t.Fatal("a Mini App button appeared while applying")
+	}
+	h.flowClick("alone")
+	h.flowClick("confirm")
+	if h.a.applyCalls != 1 {
+		t.Fatal("application not sent after the profile was completed")
 	}
 }

@@ -29,7 +29,7 @@ type fakeSender struct {
 	resolveErr, sendErr error
 	username            string
 	text                string
-	button              tgsend.Button
+	buttons             []tgsend.Button
 }
 
 func (f *fakeSender) Configured() bool { return !f.off }
@@ -39,7 +39,7 @@ func (f *fakeSender) BotUsername(context.Context) (string, error) {
 func (f *fakeSender) ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error) {
 	return tgsend.ChannelInfo{ID: testChat, BotUsername: f.username}, f.resolveErr
 }
-func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b tgsend.Button) (int64, error) {
+func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b []tgsend.Button) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if id >= 0 {
@@ -50,7 +50,7 @@ func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b
 	}
 	f.calls[id]++
 	f.total++
-	f.text, f.button = text, b
+	f.text, f.buttons = text, b
 	return 123, f.sendErr
 }
 func (f *fakeSender) sent(chat int64) int {
@@ -201,8 +201,11 @@ func TestChannelPostsOncePerChannelAcrossConcurrentWorkersAndRestart(t *testing.
 	if f.total != 2 {
 		t.Fatal("restart duplicated posts")
 	}
-	if strings.Contains(f.text, e.ContactPhone) || strings.Contains(f.text, e.Description) || !strings.Contains(f.text, "250 000") || f.button.URL != "https://t.me/testbot?start=job_"+e.ID.Hex() {
-		t.Fatal("channel summary leaked details or wrong job link")
+	if strings.Contains(f.text, e.ContactPhone) || strings.Contains(f.text, e.Description) || !strings.Contains(f.text, "250 000") {
+		t.Fatal("channel summary leaked details")
+	}
+	if len(f.buttons) == 0 || f.buttons[0].URL != "https://t.me/testbot?start=job_"+e.ID.Hex() {
+		t.Fatalf("wrong job link: %+v", f.buttons)
 	}
 }
 
@@ -362,8 +365,67 @@ func TestChannelDisabledWithoutTokenAndRejectsWrongBotName(t *testing.T) {
 
 func TestChannelMessageEscapesTextAndKeepsPayMeaning(t *testing.T) {
 	e := models.Elon{ID: primitive.NewObjectID(), Title: `<a href="https://bad.test">Ish</a> & ish`, WorkersNeeded: 3, PricingType: "negotiable", PerWorkerAmount: 99999, Region: "<b>Viloyat</b>"}
-	text, b := Message(e, "testbot")
-	if strings.Contains(text, "<a ") || strings.Contains(text, "<b>Viloyat") || strings.Contains(text, "99999") || !strings.Contains(text, "Kelishiladi") || !b.Valid() {
+	text, buttons := Message(e, "testbot")
+	if strings.Contains(text, "<a ") || strings.Contains(text, "<b>Viloyat") || strings.Contains(text, "99999") || !strings.Contains(text, "Kelishiladi") {
 		t.Fatal("unsafe or misleading summary")
+	}
+	for _, b := range buttons {
+		if !b.Valid() {
+			t.Fatalf("invalid button: %+v", b)
+		}
+	}
+}
+
+// Kanalga xarita havolasi chiqadi, aloqa ma'lumoti esa CHIQMAYDI: ish
+// qayerdaligini bilmasdan unga borib bo'lmaydi, telefon va to'liq tavsif
+// esa faqat botda ochiladi.
+func TestChannelPostCarriesTheMapButMotContactDetails(t *testing.T) {
+	base := models.Elon{
+		ID: primitive.NewObjectID(), Title: "Yuk tushirish", WorkersNeeded: 3,
+		Description:  "Uzun tavsif va qo'shimcha shartlar",
+		ContactPhone: "+998901112233", LocationText: "Chilonzor, 5-kvartal",
+		Region: "Toshkent", District: "Chilonzor",
+		PricingType: "per_worker", PerWorkerAmount: 150000,
+	}
+	withMap := base
+	withMap.Lat, withMap.Lng = 41.3111, 69.2797
+
+	text, buttons := Message(withMap, "testbot")
+	if strings.Contains(text, base.ContactPhone) || strings.Contains(text, base.Description) || strings.Contains(text, base.LocationText) {
+		t.Fatalf("channel post leaked private details: %q", text)
+	}
+	var mapURL string
+	for _, b := range buttons {
+		if strings.Contains(b.URL, "maps") {
+			mapURL = b.URL
+		}
+		if !b.Valid() {
+			t.Fatalf("invalid button: %+v", b)
+		}
+	}
+	if mapURL != "https://www.google.com/maps?q=41.311100,69.279700" {
+		t.Fatalf("map link: %q", mapURL)
+	}
+
+	// Koordinatasiz e'lon (eski yozuv): tugma umuman qo'shilmaydi, ishlamaydigan
+	// havola chiqarishdan ko'ra yo'qligi ma'qul.
+	_, plain := Message(base, "testbot")
+	for _, b := range plain {
+		if strings.Contains(b.URL, "maps") {
+			t.Fatalf("map button without coordinates: %+v", b)
+		}
+	}
+	if len(plain) != 1 {
+		t.Fatalf("want only the job button, got %+v", plain)
+	}
+}
+
+// Buzuq koordinata ishlamaydigan havola bo'lib chiqmasligi kerak.
+func TestChannelMapLinkRejectsImpossibleCoordinates(t *testing.T) {
+	for _, tc := range []struct{ lat, lng float64 }{{0, 0}, {91, 69}, {41, 181}, {-91, -181}} {
+		e := models.Elon{ID: primitive.NewObjectID(), Lat: tc.lat, Lng: tc.lng}
+		if got := mapLink(e); got != "" {
+			t.Fatalf("lat=%v lng=%v -> %q", tc.lat, tc.lng, got)
+		}
 	}
 }

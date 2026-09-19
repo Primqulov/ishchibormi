@@ -7,20 +7,23 @@ import (
 	tg "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// Profil to'ldirish qadamlari.
+// Profil to'ldirish qadamlari — ro'yxatdan o'tishda ham, ariza berishda ham
+// BIR XIL: ism, familiya, viloyat, tuman.
 //
-// NEGA FAMILIYA FAQAT RO'YXATDAN O'TISHDA: mavjud hisoblarning ko'pida
-// familiya yo'q (sayt uni majburiy qilmagan). Uni ariza berish o'rtasida
-// talab qilsak, ish topayotgan odam kutilmaganda qo'shimcha savolga duch
-// kelardi. Ro'yxatdan o'tish esa aynan profil to'ldirish jarayoni.
+// NEGA ARIZADA HAM TO'LIQ: ariza ish beruvchiga boradi va u kim kelayotganini
+// va qayerdanligini biladigan bo'lishi kerak. Chala profil bilan yuborilgan
+// ariza ish beruvchi uchun "kimdir" dan iborat bo'lib qolardi. Yetishmagan
+// maydon aynan shu yerda, botning o'zida so'raladi — Mini App yoki saytga
+// o'tish talab qilinmaydi.
 type profileStep struct{ step, value string }
 
-func profileSteps(purpose string, p Profile) []profileStep {
-	steps := []profileStep{{"first_name", p.FirstName}}
-	if purpose == "register" {
-		steps = append(steps, profileStep{"last_name", p.LastName})
+func profileSteps(p Profile) []profileStep {
+	return []profileStep{
+		{"first_name", p.FirstName},
+		{"last_name", p.LastName},
+		{"region", p.Region},
+		{"district", p.District},
 	}
-	return append(steps, profileStep{"region", p.Region}, profileStep{"district", p.District})
 }
 
 // Bir sahifadagi tuman tugmalari. Eng katta viloyatda 22 ta tuman bor —

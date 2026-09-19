@@ -63,7 +63,7 @@ func TestChannelTransportResolvesRightsAndSendsOnlySilentChannelPost(t *testing.
 			if err != nil || info.BotUsername != "testbot" {
 				t.Fatal("resolve failed", err)
 			}
-			id, err := c.SendChannelHTML(context.Background(), info.ID, "<b>Ish</b>", Button{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"})
+			id, err := c.SendChannelHTML(context.Background(), info.ID, "<b>Ish</b>", []Button{{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"}, {Text: "Xaritada ochish", URL: "https://www.google.com/maps?q=41.311100,69.279700"}})
 			if err != nil || id != 12 || !sent {
 				t.Fatal("send failed", err)
 			}
@@ -77,7 +77,7 @@ func TestChannelTransportNeverLeaksTokenOrAcceptsPrivateTarget(t *testing.T) {
 		calls++
 		return nil, errors.New("transport " + r.URL.String())
 	})
-	_, err := c.SendChannelHTML(context.Background(), 123, "message", Button{Text: "Open", URL: "https://t.me/testbot"})
+	_, err := c.SendChannelHTML(context.Background(), 123, "message", []Button{{Text: "Open", URL: "https://t.me/testbot"}})
 	if err == nil || calls != 0 {
 		t.Fatal("private target sent")
 	}

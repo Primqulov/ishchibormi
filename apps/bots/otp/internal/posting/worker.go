@@ -322,7 +322,7 @@ func (e *Engine) workerAuthenticated(ctx context.Context, d *Draft, update int, 
 	f := d.Worker
 	f.UserID, f.Profile = s.User.ID, s.User
 	if f.Purpose == "apply" || f.Purpose == "register" {
-		for _, field := range profileSteps(f.Purpose, f.Profile) {
+		for _, field := range profileSteps(f.Profile) {
 			if strings.TrimSpace(field.value) == "" {
 				f.Step = field.step
 				if err := e.saveWorker(ctx, d, update); err != nil {
@@ -535,7 +535,7 @@ func (e *Engine) continueWorker(ctx context.Context, d *Draft, update int, m *tg
 func (e *Engine) advanceProfile(ctx context.Context, d *Draft, update int, p Profile) error {
 	f := d.Worker
 	f.Profile, f.Filled = p, true
-	for _, field := range profileSteps(f.Purpose, p) {
+	for _, field := range profileSteps(p) {
 		if strings.TrimSpace(field.value) == "" {
 			f.Step = field.step
 			if err := e.saveWorker(ctx, d, update); err != nil {
