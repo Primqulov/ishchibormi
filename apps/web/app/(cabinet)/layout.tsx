@@ -2,6 +2,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getAccess } from "@/lib/api";
+import { loginPath } from "@/lib/auth-redirect";
 
 /**
  * CabinetLayout is the auth boundary for every page in the (cabinet) group.
@@ -30,7 +31,7 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
         setAuthed(true);
       } else {
         setAuthed(false);
-        router.replace("/login");
+        router.replace(loginPath());
       }
     };
     check();

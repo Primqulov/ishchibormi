@@ -52,7 +52,7 @@ export function PhoneInput({
         +998
       </span>
       <input
-        className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"
+        className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none focus-visible:shadow-none"
         style={{ color: "var(--text)" }}
         required={required}
         inputMode="numeric"

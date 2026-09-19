@@ -35,7 +35,6 @@ const SECURITY_HEADERS = [
   { key: 'Content-Security-Policy', value: csp },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(self), payment=(), usb=()' },
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
   ...(process.env.NODE_ENV === 'production'
@@ -54,6 +53,11 @@ const nextConfig = {
     // Barcha root-darajadagi ikon fayllari (.png/.ico) + /img/ OG rasmlari.
     return [
       { source: '/:path*', headers: SECURITY_HEADERS },
+      { source: '/:path((?!miniapp).*)', headers: [{ key: 'X-Frame-Options', value: 'DENY' }] },
+      { source: '/miniapp/:path*', headers: [
+        { key: 'Content-Security-Policy', value: csp.replace("frame-ancestors 'none'", "frame-ancestors https://web.telegram.org https://*.telegram.org").replace("script-src 'self'", "script-src 'self' https://telegram.org") },
+        { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+      ] },
       { source: '/:file([^/]+\\.ico)', headers: [{ key: 'Cache-Control', value: ICON_CACHE }] },
       { source: '/:file([^/]+\\.png)', headers: [{ key: 'Cache-Control', value: ICON_CACHE }] },
       { source: '/img/:path*', headers: [{ key: 'Cache-Control', value: ICON_CACHE }] },

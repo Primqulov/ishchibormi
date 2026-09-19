@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, Notification } from "@/lib/api";
 import { Shell } from "@/components/Shell";
-import { Bell, Check, CheckCheck, X, Briefcase, FileText, Send, AlertTriangle } from "lucide-react";
+import { Bell, Check, CheckCheck, X, Briefcase, FileText, Send, AlertTriangle, MapPin } from "lucide-react";
 import { T } from "@/components/T";
 import { AUTH_BOT } from "@/lib/contact";
 import dayjs from "dayjs";
@@ -131,10 +131,13 @@ const ICONS: Record<string, { icon: React.ReactNode; bg: string; fg: string }> =
   application_accepted: { icon: <Check size={16} />,         bg: "#DFF5E5", fg: "#1A7F3C" },
   job_completed:        { icon: <Check size={16} />,         bg: "#DFF5E5", fg: "#1A7F3C" },
   new_application:      { icon: <FileText size={16} />,      bg: "#FFEED4", fg: "#8A5300" },
+  application_submitted:{ icon: <FileText size={16} />,      bg: "#E5EEFF", fg: "#0038D8" },
   job_completed_request:{ icon: <AlertTriangle size={16} />, bg: "#FFEED4", fg: "#8A5300" },
   application_rejected: { icon: <X size={16} />,             bg: "#FEE4E2", fg: "#B42318" },
   application_cancelled:{ icon: <X size={16} />,             bg: "#FEE4E2", fg: "#B42318" },
   new_elon:             { icon: <Briefcase size={16} />,     bg: "#E5EEFF", fg: "#0038D8" },
+  // Ish signali (backend: internal/jobalert) — hudud bo'yicha yangi e'lon.
+  job_nearby:           { icon: <MapPin size={16} />,        bg: "#E5EEFF", fg: "#0038D8" },
 };
 
 function Item({ n }: { n: Notification }) {

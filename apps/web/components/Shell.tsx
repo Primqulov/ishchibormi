@@ -9,6 +9,7 @@ import {
   ListChecks, FileText, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { api, getAccess, Notification, setAccess, User } from "@/lib/api";
+import { loginPath, safeReturnPath } from "@/lib/auth-redirect";
 import { T, useT } from "@/components/T";
 import { LangMenu } from "@/components/LangMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -50,7 +51,7 @@ export function Shell({
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Auth gate
-  useEffect(() => { if (!getAccess()) router.replace("/login"); }, [router]);
+  useEffect(() => { if (!getAccess()) router.replace(loginPath()); }, [router]);
 
   const {
     data: me,
@@ -74,7 +75,7 @@ export function Shell({
   useEffect(() => {
     if (meError && !getAccess()) {
       qc.clear();
-      router.replace("/login");
+      router.replace(loginPath());
     }
   }, [meError, router, qc]);
 
@@ -91,7 +92,8 @@ export function Shell({
   // onboarding redirect
   useEffect(() => {
     if (me && !me.onboardingCompleted && pathname && !pathname.startsWith("/onboarding")) {
-      router.replace("/onboarding");
+      const next = safeReturnPath(window.location.pathname + window.location.search + window.location.hash);
+      router.replace("/onboarding?next=" + encodeURIComponent(next));
     }
   }, [me, pathname, router]);
 

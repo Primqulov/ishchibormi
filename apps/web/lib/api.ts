@@ -1,5 +1,8 @@
 "use client";
 
+import { isMiniAppPage } from "@/lib/miniapp";
+import { fetchMiniApp, isTransientMiniAppStatus } from "@/lib/miniapp-transport";
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
 export const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE || "ws://localhost:8080";
 
@@ -23,6 +26,11 @@ export function adminBase(): string {
 }
 
 const ACCESS_KEY = "ib-access";
+const MINIAPP_ACCESS_KEY = "ib-miniapp-access";
+
+export function userAPIURL(path: string): string {
+  return isMiniAppPage() ? `/api/miniapp${path.replace(/^\/api(?=\/)/, "")}` : `${API_BASE}${path}`;
+}
 const ADMIN_KEY = "ib-admin";
 // Legacy key: the refresh token used to be persisted here. The web app never
 // calls the refresh endpoint — the access token TTL alone defines the session —
@@ -33,10 +41,16 @@ const LEGACY_REFRESH_KEY = "ib-refresh";
 
 export function getAccess(): string | null {
   if (typeof window === "undefined") return null;
+  if (isMiniAppPage()) return sessionStorage.getItem(MINIAPP_ACCESS_KEY);
   return localStorage.getItem(ACCESS_KEY);
 }
 export function setAccess(t: string | null) {
   if (typeof window === "undefined") return;
+  if (isMiniAppPage()) {
+    if (t) sessionStorage.setItem(MINIAPP_ACCESS_KEY, t);
+    else sessionStorage.removeItem(MINIAPP_ACCESS_KEY);
+    return;
+  }
   if (t) localStorage.setItem(ACCESS_KEY, t);
   else localStorage.removeItem(ACCESS_KEY);
   // Whenever the user's auth state changes (login, logout, 401), drop any
@@ -178,6 +192,9 @@ function connectionError(): APIError {
 }
 
 function responseError(status: number, data: any): APIError {
+  if (isMiniAppPage() && isTransientMiniAppStatus(status)) {
+    return { code: "miniapp_connection_unavailable", message: "Ulanish vaqtincha uzildi. Birozdan so'ng qayta urinib ko'ring." };
+  }
   if (status >= 500) {
     return {
       code: "server_error",
@@ -246,20 +263,27 @@ async function request<T>(
   // subdomenida yashaydi, kim qanday chaqirishidan qat'i nazar.
   const isAdminPath = path.startsWith("/api/admin");
   let res: Response;
+  let text: string;
   try {
-    res = await fetch(`${isAdminPath ? adminBase() : API_BASE}${path}`, {
+    const url = isAdminPath ? `${adminBase()}${path}` : userAPIURL(path);
+    const init: RequestInit = {
       ...opts,
       headers,
       // Admin sessiyasining refresh cookie'si so'rov bilan birga ketsin —
       // login javobi aynan shu cookie'ni o'rnatadi. Foydalanuvchi oqimida
       // cookie umuman yo'q (faqat Bearer token), u yerda o'zgarish yo'q.
       ...(isAdminPath ? { credentials: "include" as RequestCredentials } : {}),
-    });
+    };
+    if (!isAdminPath && isMiniAppPage()) {
+      ({ response: res, text } = await fetchMiniApp(url, init));
+    } else {
+      res = await fetch(url, init);
+      text = await res.text();
+    }
   } catch {
     throw connectionError();
   }
 
-  const text = await res.text();
   // Javob JSON bo'lmasligi mumkin (masalan proksi 502 HTML sahifasi) — parse
   // xatosi butun so'rovni yiqitmasin.
   let data: any = null;

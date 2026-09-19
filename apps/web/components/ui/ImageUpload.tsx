@@ -5,6 +5,7 @@ import { uploadFile, deleteUploaded, UploadKind } from "@/lib/upload";
 import { APIError } from "@/lib/api";
 import { ModerationModal, isModerationError } from "@/components/ModerationModal";
 import { Avatar } from "./Avatar";
+import { uploadPreviewURL } from "@/lib/miniapp";
 
 interface AvatarUploaderProps {
   value?: string;             // current URL
@@ -93,25 +94,28 @@ export function AvatarUploader({ value, name, onChange, kind = "avatar", scope }
 interface MultiImageProps {
   value: string[];
   onChange: (urls: string[]) => void;
+  onBusyChange?: (busy: boolean) => void;
+  disabled?: boolean;
   max?: number;
   kind?: UploadKind;
   scope?: string;
 }
 
 /** Multiple-image uploader used in elon create/edit. */
-export function MultiImageUploader({ value, onChange, max = 6, kind = "elon", scope }: MultiImageProps) {
+export function MultiImageUploader({ value, onChange, onBusyChange, disabled = false, max = 6, kind = "elon", scope }: MultiImageProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [modErr, setModErr] = useState<APIError | null>(null);
 
   async function handle(files: FileList | null) {
-    if (!files) return;
+    if (!files || busy || disabled) return;
     setErr("");
     const remaining = max - value.length;
     if (remaining <= 0) { setErr(`Maksimal ${max} ta rasm qo'shish mumkin.`); return; }
     const arr = Array.from(files).slice(0, remaining);
     setBusy(true);
+    onBusyChange?.(true);
     const next = [...value];
     for (const f of arr) {
       if (!f.type.startsWith("image/")) { setErr("Faqat rasm fayllari qabul qilinadi (JPG, PNG, WebP)."); continue; }
@@ -126,6 +130,7 @@ export function MultiImageUploader({ value, onChange, max = 6, kind = "elon", sc
       }
     }
     setBusy(false);
+    onBusyChange?.(false);
   }
 
   function remove(url: string) {
@@ -139,9 +144,11 @@ export function MultiImageUploader({ value, onChange, max = 6, kind = "elon", sc
         {value.map((u) => (
           <div key={u} className="relative aspect-square rounded-xl overflow-hidden border" style={{ borderColor: "var(--border)" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={u} alt="" className="w-full h-full object-cover" />
+            <img src={uploadPreviewURL(u)} alt="" className="w-full h-full object-cover" />
             <button
               type="button"
+              disabled={busy || disabled}
+              aria-label="Rasmni o'chirish"
               onClick={() => remove(u)}
               className="absolute top-1 right-1 grid place-items-center h-6 w-6 rounded-full bg-black/60 text-white hover:bg-danger transition"
             >
@@ -153,7 +160,8 @@ export function MultiImageUploader({ value, onChange, max = 6, kind = "elon", sc
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            disabled={busy}
+            disabled={busy || disabled}
+            aria-label="Rasm qo'shish"
             className="aspect-square rounded-xl border border-dashed grid place-items-center muted hover:bg-[color:var(--bg-subtle)] transition"
             style={{ borderColor: "var(--border-strong)" }}
           >

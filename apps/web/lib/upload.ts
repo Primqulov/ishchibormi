@@ -1,5 +1,5 @@
 "use client";
-import { API_BASE, getAccess } from "@/lib/api";
+import { userAPIURL, getAccess } from "@/lib/api";
 
 export type UploadKind = "avatar" | "elon";
 
@@ -25,7 +25,7 @@ export function uploadFile(file: File, kind: UploadKind, opts: UploadOpts = {}):
     const fd = new FormData();
     fd.append("file", file, file.name);
 
-    const url = new URL(`${API_BASE}/api/uploads`);
+    const url = new URL(userAPIURL("/api/uploads"), window.location.origin);
     url.searchParams.set("kind", kind);
     if (opts.scope) url.searchParams.set("scope", opts.scope);
 
@@ -82,7 +82,7 @@ export function uploadFile(file: File, kind: UploadKind, opts: UploadOpts = {}):
 export async function deleteUploaded(urlOrKey: { url?: string; key?: string }): Promise<void> {
   const token = getAccess();
   if (!token) return;
-  const u = new URL(`${API_BASE}/api/uploads`);
+  const u = new URL(userAPIURL("/api/uploads"), window.location.origin);
   if (urlOrKey.url) u.searchParams.set("url", urlOrKey.url);
   if (urlOrKey.key) u.searchParams.set("key", urlOrKey.key);
   await fetch(u.toString(), {

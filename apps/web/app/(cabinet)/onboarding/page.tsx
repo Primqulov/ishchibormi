@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, User } from "@/lib/api";
+import { returnPath } from "@/lib/auth-redirect";
 import { Check, CheckCircle2 } from "lucide-react";
 import { AvatarUploader } from "@/components/ui/ImageUpload";
 import { LangMenu } from "@/components/LangMenu";
@@ -48,7 +49,7 @@ export default function Onboarding() {
         firstName, lastName, region, district, avatarUrl: avatarUrl || "",
       });
       qc.setQueryData(["me"], updated);
-      router.replace("/dashboard");
+      router.replace(returnPath());
     } finally {
       setSaving(false);
     }

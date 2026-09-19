@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check, ExternalLink } from "lucide-react";
 import { api, APIError, setAccess, User } from "@/lib/api";
 import { AUTH_BOT_USERNAME } from "@/lib/contact";
+import { returnPath } from "@/lib/auth-redirect";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/Logo";
 import { T, useT } from "@/components/T";
@@ -64,7 +65,8 @@ export default function LoginPage() {
       // Faqat access token saqlanadi. Refresh token localStorage'da saqlanmaydi
       // (web ilova refresh oqimini ishlatmaydi) — XSS hujum yuzasini kamaytiradi.
       setAccess(v.accessToken);
-      router.replace(v.user.onboardingCompleted ? "/dashboard" : "/onboarding");
+      const next = returnPath();
+      router.replace(v.user.onboardingCompleted ? next : "/onboarding?next=" + encodeURIComponent(next));
     } catch (err: unknown) {
       // Backend xabari texnik yoki inglizcha bo'lishi mumkin. Uni ekranga
       // bevosita chiqarmaymiz; faqat xato kodiga mos, foydalanuvchi uchun
