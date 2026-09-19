@@ -99,31 +99,32 @@ func ValidCoordinates(lat, lng float64) bool {
 	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
 }
 
-// SendChannelVenue — Telegramning o'z xarita kartasi.
+// SendChannelLocation — Telegramning o'z xarita kartasi.
 //
-// NEGA VENUE: kartaga bosilganda Telegram O'ZINING xaritasini ochadi va
+// NEGA LOKATSIYA: kartaga bosilganda Telegram O'ZINING xaritasini ochadi va
 // foydalanuvchi xohlasa o'zi tashqi xaritaga o'tadi. Oddiy havola tugmasi
 // buni qila olmaydi — u har doim brauzerni ochib yuborardi.
 //
-// Sarlavha va manzil PLAIN matn: HTML bilan bezatilmaydi va shuning uchun
-// ekranlash ham qilinmaydi (aks holda kartada `&amp;` ko'rinardi). Venue
-// caption qabul qilmaydi, ya'ni tafsilotlar alohida xabarda boradi.
-func (c *Client) SendChannelVenue(ctx context.Context, channelID int64, lat, lng float64, title, address string) (int64, error) {
-	if channelID >= 0 || !ValidCoordinates(lat, lng) || strings.TrimSpace(title) == "" || strings.TrimSpace(address) == "" {
+// Venue emas, ATAYLAB oddiy lokatsiya: venue sarlavha va manzilni MAJBURIY
+// talab qiladi va ularni kartaning ostiga yozib qo'yadi, natijada ish nomi
+// bilan hudud ikki marta — kartada ham, ostidagi matnda ham — ko'rinardi.
+// Lokatsiya esa yalang'och xarita beradi.
+//
+// Karta caption qabul qilmaydi, ya'ni tafsilotlar alohida xabarda boradi.
+func (c *Client) SendChannelLocation(ctx context.Context, channelID int64, lat, lng float64) (int64, error) {
+	if channelID >= 0 || !ValidCoordinates(lat, lng) {
 		return 0, &APIError{Code: 400, Reason: "invalid_channel_post"}
 	}
 	payload := struct {
-		ChatID  int64   `json:"chat_id"`
-		Lat     float64 `json:"latitude"`
-		Lng     float64 `json:"longitude"`
-		Title   string  `json:"title"`
-		Address string  `json:"address"`
-		Silent  bool    `json:"disable_notification"`
-	}{channelID, lat, lng, title, address, true}
+		ChatID int64   `json:"chat_id"`
+		Lat    float64 `json:"latitude"`
+		Lng    float64 `json:"longitude"`
+		Silent bool    `json:"disable_notification"`
+	}{channelID, lat, lng, true}
 	var result struct {
 		MessageID int64 `json:"message_id"`
 	}
-	err := c.channelCall(ctx, "sendVenue", payload, &result)
+	err := c.channelCall(ctx, "sendLocation", payload, &result)
 	if err == nil && result.MessageID <= 0 {
 		err = ErrUnreachable
 	}

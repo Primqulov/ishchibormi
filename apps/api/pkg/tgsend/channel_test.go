@@ -37,17 +37,22 @@ func TestChannelTransportResolvesRightsAndSendsOnlySilentChannelPost(t *testing.
 					body = `{"ok":true,"result":{"status":"administrator","can_post_messages":` + post + `}}`
 				// Koordinatasi bor e'lon venue bo'lib ketadi: Telegram uni o'z
 				// xarita kartasida ko'rsatadi. Koordinatasizi sendMessage.
-				case strings.HasSuffix(r.URL.Path, "/sendVenue"):
+				case strings.HasSuffix(r.URL.Path, "/sendLocation"):
 					sent = true
 					var payload map[string]any
 					if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 						t.Fatal(err)
 					}
 					if payload["chat_id"] != float64(-1001234567890) || payload["disable_notification"] != true {
-						t.Fatal("incorrect channel venue")
+						t.Fatal("incorrect channel map card")
 					}
-					if payload["latitude"] == nil || payload["longitude"] == nil || payload["title"] == "" || payload["address"] == "" {
-						t.Fatal("venue without a place")
+					if payload["latitude"] == nil || payload["longitude"] == nil {
+						t.Fatal("map card without coordinates")
+					}
+					// Yalang'och xarita: sarlavha va manzil ATAYLAB yo'q —
+					// ular ostidagi matnda takrorlanardi.
+					if payload["title"] != nil || payload["address"] != nil {
+						t.Fatal("map card carries a caption")
 					}
 					if payload["from_chat_id"] != nil {
 						t.Fatal("private message forwarded")
@@ -83,8 +88,8 @@ func TestChannelTransportResolvesRightsAndSendsOnlySilentChannelPost(t *testing.
 			}
 			// Xarita kartasi va uning ostidagi matn — ikkita alohida xabar:
 			// Telegram venue caption qabul qilmaydi.
-			if _, err := c.SendChannelVenue(context.Background(), info.ID, 41.3111, 69.2797, "Ish", "Toshkent, Chilonzor"); err != nil {
-				t.Fatal("venue failed", err)
+			if _, err := c.SendChannelLocation(context.Background(), info.ID, 41.3111, 69.2797); err != nil {
+				t.Fatal("map card failed", err)
 			}
 			id, err := c.SendChannelHTML(context.Background(), info.ID, "<b>Ish</b>",
 				[]Button{{Text: "Botda ko'rish", URL: "https://t.me/testbot?start=job_123456789012345678901234"}})

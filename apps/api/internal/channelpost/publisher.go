@@ -29,7 +29,7 @@ type Sender interface {
 	Configured() bool
 	BotUsername(context.Context) (string, error)
 	ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error)
-	SendChannelVenue(context.Context, int64, float64, float64, string, string) (int64, error)
+	SendChannelLocation(context.Context, int64, float64, float64) (int64, error)
 	SendChannelHTML(context.Context, int64, string, []tgsend.Button) (int64, error)
 }
 
@@ -306,15 +306,15 @@ func (p *Publisher) deliverNext(parent context.Context) (bool, error) {
 	// kerak. Venue caption qabul qilmaydi, shuning uchun ular alohida
 	// xabarda. Karta ID si darhol saqlanadi: matn yuborishda xato bo'lsa,
 	// qayta urinish kartani ikkinchi marta chiqarmaydi.
-	if post.Venue && claimed.VenueMessageID == 0 {
-		venueID, err := p.sender.SendChannelVenue(ctx, claimed.ChatID, post.Lat, post.Lng, post.Title, post.Address)
+	if post.Map && claimed.MapMessageID == 0 {
+		mapID, err := p.sender.SendChannelLocation(ctx, claimed.ChatID, post.Lat, post.Lng)
 		if err != nil {
 			return true, p.afterSendError(ctx, claimed, err)
 		}
-		if _, err := p.posts.UpdateOne(ctx, p.lease(claimed), bson.M{"$set": bson.M{"venueMessageId": venueID}}); err != nil {
+		if _, err := p.posts.UpdateOne(ctx, p.lease(claimed), bson.M{"$set": bson.M{"mapMessageId": mapID}}); err != nil {
 			return true, err
 		}
-		claimed.VenueMessageID = venueID
+		claimed.MapMessageID = mapID
 	}
 	id, err := p.sender.SendChannelHTML(ctx, claimed.ChatID, post.Text, post.Buttons)
 	if err == nil && id > 0 {
@@ -391,14 +391,13 @@ func (p *Publisher) channelDelivered(ctx context.Context, chatID int64) {
 //
 // Aloqa telefoni, to'liq tavsif va manzil matni kanalga CHIQMAYDI: ularni
 // ko'rish uchun odam botga o'tadi.
-// Post — kanalga yuboriladigan e'lon. Koordinatasi bor bo'lsa avval xarita
-// kartasi, so'ng uning ostida to'liq matn ketadi.
+// Post — kanalga yuboriladigan e'lon. Koordinatasi bor bo'lsa avval
+// yalang'och xarita kartasi, so'ng uning ostida to'liq matn ketadi.
 type Post struct {
-	Venue          bool
-	Lat, Lng       float64
-	Title, Address string
-	Text           string
-	Buttons        []tgsend.Button
+	Map      bool
+	Lat, Lng float64
+	Text     string
+	Buttons  []tgsend.Button
 }
 
 func Message(e models.Elon, username string) Post {
@@ -407,29 +406,9 @@ func Message(e models.Elon, username string) Post {
 		Buttons: []tgsend.Button{{Text: "Ish haqida batafsil", URL: "https://t.me/" + username + "?start=job_" + e.ID.Hex()}},
 	}
 	if tgsend.ValidCoordinates(e.Lat, e.Lng) {
-		post.Venue, post.Lat, post.Lng = true, e.Lat, e.Lng
-		post.Title, post.Address = venueTitle(e), venueAddress(e)
+		post.Map, post.Lat, post.Lng = true, e.Lat, e.Lng
 	}
 	return post
-}
-
-// Karta sarlavhasi — faqat ish nomi. Kishi soni, ish haqi va sana ostidagi
-// matnda to'liq yoziladi, shuning uchun bu yerda takrorlanmaydi.
-func venueTitle(e models.Elon) string {
-	title := shorten(plain(e.Title), 120)
-	if title == "" {
-		return "Ish e'loni"
-	}
-	return title
-}
-
-// Karta ostidagi kichik qator — hudud. Telegram bo'sh manzilni rad etadi,
-// xaritaning o'zi esa baribir aniq joyni ko'rsatadi.
-func venueAddress(e models.Elon) string {
-	if address := placeText(e); address != "" {
-		return shorten(address, 250)
-	}
-	return "Manzil xaritada"
 }
 
 // summaryHTML — koordinatasiz e'lon uchun eski matn posti.

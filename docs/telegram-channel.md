@@ -11,19 +11,18 @@ orqali kanal posti yaratiladi; ovozli bildirishnoma va havola preview si
 o'chirilgan.
 
 Koordinatasi bor e'lon **ikkita xabar** bo'lib chiqadi: avval Telegramning
-o'z xarita kartasi (**venue**), so'ng uning ostida to'liq matn va tugma.
+o'z xarita kartasi (`sendLocation`), so'ng uning ostida to'liq matn va tugma.
 Kartaga bosilganda Telegram O'ZINING xaritasini ochadi — brauzer yoki Google
 Maps'ga chiqib ketmaydi, foydalanuvchi xohlasa o'zi tashqi xaritaga o'tadi.
-Oddiy havola tugmasi buni qila olmaydi, venue esa caption qabul qilmaydi —
+Oddiy havola tugmasi buni qila olmaydi, karta esa caption qabul qilmaydi —
 shuning uchun tafsilotlar alohida xabarda.
 
-Kartada faqat joy konteksti: ish nomi va hudud. Kishi soni, ish haqi va sana
-ostidagi matnda to'liq yoziladi, ya'ni kartada takrorlanmaydi. Karta
-sarlavhasi va manzili PLAIN matn (HTML emas), shuning uchun ekranlash
-qilinmaydi — aks holda kartada `&amp;` ko'rinardi.
+Karta ATAYLAB yalang'och — `sendVenue` emas. Venue sarlavha va manzilni
+MAJBURIY talab qiladi va ularni kartaning ostiga yozib qo'yadi; natijada ish
+nomi bilan hudud ikki marta — kartada ham, ostidagi matnda ham — ko'rinardi.
 
 Karta matndan OLDIN yuboriladi va uning message ID si darhol saqlanadi
-(`channel_posts.venueMessageId`). Shunda matn yuborishda xato bo'lsa, qayta
+(`channel_posts.mapMessageId`). Shunda matn yuborishda xato bo'lsa, qayta
 urinish kartani ikkinchi marta chiqarmaydi. Karta yuborilmasa matn ham
 ketmaydi: yarim post kartasiz tafsilot yoki tafsilotsiz karta bo'lib
 qolardi.
@@ -55,10 +54,6 @@ qilinmaydi: e'lonlar oqimi suhbatni bosib ketardi.
 > ┌──────────────────────────┐
 > │   XARITA (Telegram)   📍 │
 > └──────────────────────────┘
-> **Yuk tushirish uchun ishchilar kerak**
-> Toshkent, Chilonzor
->
-> ────────────────────────────
 >
 > 💼 **Yuk tushirish uchun ishchilar kerak**
 >

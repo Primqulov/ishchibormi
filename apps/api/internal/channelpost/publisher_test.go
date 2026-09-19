@@ -30,11 +30,9 @@ type fakeSender struct {
 	username            string
 	text                string
 	buttons             []tgsend.Button
-	venues              int
-	venueErr            error
-	venueTitle          string
-	venueAddress        string
-	venueLat, venueLng  float64
+	maps                int
+	mapErr              error
+	mapLat, mapLng      float64
 }
 
 func (f *fakeSender) Configured() bool { return !f.off }
@@ -44,18 +42,17 @@ func (f *fakeSender) BotUsername(context.Context) (string, error) {
 func (f *fakeSender) ResolveChannel(context.Context, string) (tgsend.ChannelInfo, error) {
 	return tgsend.ChannelInfo{ID: testChat, BotUsername: f.username}, f.resolveErr
 }
-func (f *fakeSender) SendChannelVenue(_ context.Context, id int64, lat, lng float64, title, address string) (int64, error) {
+func (f *fakeSender) SendChannelLocation(_ context.Context, id int64, lat, lng float64) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if id >= 0 {
 		panic("private destination")
 	}
-	f.venueTitle, f.venueAddress = title, address
-	f.venueLat, f.venueLng = lat, lng
-	if f.venueErr != nil {
-		return 0, f.venueErr
+	f.mapLat, f.mapLng = lat, lng
+	if f.mapErr != nil {
+		return 0, f.mapErr
 	}
-	f.venues++
+	f.maps++
 	return 77, nil
 }
 func (f *fakeSender) SendChannelHTML(_ context.Context, id int64, text string, b []tgsend.Button) (int64, error) {
@@ -393,8 +390,8 @@ func TestChannelMessageEscapesTextAndKeepsPayMeaning(t *testing.T) {
 	// Koordinatasiz e'lon matn posti bo'lib qoladi, ya'ni HTML ekranlanishi
 	// shu yerda tekshiriladi.
 	post := Message(e, "testbot")
-	if post.Venue {
-		t.Fatal("a listing without coordinates became a venue")
+	if post.Map {
+		t.Fatal("a listing without coordinates got a map card")
 	}
 	if strings.Contains(post.Text, "<a ") || strings.Contains(post.Text, "<b>Viloyat") || strings.Contains(post.Text, "99999") || !strings.Contains(post.Text, "Kelishiladi") {
 		t.Fatal("unsafe or misleading summary")
@@ -423,19 +420,12 @@ func TestChannelPostCarriesTheMapButNotContactDetails(t *testing.T) {
 	// Koordinatasi bor e'lon VENUE bo'ladi: Telegram uni o'z xarita
 	// kartasida ko'rsatadi va tashqi brauzerga chiqib ketmaydi.
 	post := Message(withMap, "testbot")
-	if !post.Venue || post.Lat != withMap.Lat || post.Lng != withMap.Lng {
-		t.Fatalf("listing with coordinates did not become a venue: %+v", post)
+	if !post.Map || post.Lat != withMap.Lat || post.Lng != withMap.Lng {
+		t.Fatalf("listing with coordinates got no map card: %+v", post)
 	}
-	card := post.Title + " | " + post.Address
-	if strings.Contains(card, base.ContactPhone) || strings.Contains(card, base.Description) || strings.Contains(card, base.LocationText) {
-		t.Fatalf("channel post leaked private details: %q", card)
-	}
-	// Karta faqat joy konteksti: nom va hudud. Tafsilotlar ostidagi matnda,
-	// ya'ni kartada takrorlanmaydi.
-	if post.Title != "Yuk tushirish" || !strings.Contains(post.Address, "Chilonzor") {
-		t.Fatalf("venue card: title=%q address=%q", post.Title, post.Address)
-	}
-	// Matn kartaning OSTIDA turadi va to'liq tafsilotni beradi.
+
+	// Matn kartaning OSTIDA turadi va to'liq tafsilotni beradi. Kartaning
+	// o'zi yalang'och: sarlavha/manzil bo'lsa ular shu matnda takrorlanardi.
 	for _, want := range []string{"Yuk tushirish", "3 kishi", "150 000", "Chilonzor"} {
 		if !strings.Contains(post.Text, want) {
 			t.Fatalf("text under the card is missing %q: %s", want, post.Text)
@@ -444,29 +434,24 @@ func TestChannelPostCarriesTheMapButNotContactDetails(t *testing.T) {
 	if strings.Contains(post.Text, base.ContactPhone) || strings.Contains(post.Text, base.Description) || strings.Contains(post.Text, base.LocationText) {
 		t.Fatalf("text under the card leaked private details: %q", post.Text)
 	}
-	// Venue sarlavhasi PLAIN matn — HTML ekranlash u yerda `&amp;` bo'lib
-	// ko'rinardi.
-	if strings.Contains(card, "&amp;") || strings.Contains(card, "<b>") {
-		t.Fatalf("venue card contains HTML: %q", card)
-	}
 	if len(post.Buttons) != 1 || !strings.Contains(post.Buttons[0].URL, "start=job_") {
 		t.Fatalf("want only the job button, got %+v", post.Buttons)
 	}
 
 	// Koordinatasiz e'lon (eski yozuv) faqat matn posti bo'ladi — karta yo'q.
 	plain := Message(base, "testbot")
-	if plain.Venue || plain.Text == "" {
+	if plain.Map || plain.Text == "" {
 		t.Fatalf("listing without coordinates: %+v", plain)
 	}
 }
 
-// Buzuq koordinata venue bo'lib ketmasligi kerak: Telegram uni rad etadi
-// va butun post yuborilmay qolardi.
+// Buzuq koordinata xarita kartasiga aylanmasligi kerak: Telegram uni rad
+// etadi va butun post yuborilmay qolardi.
 func TestChannelRejectsImpossibleCoordinates(t *testing.T) {
 	for _, tc := range []struct{ lat, lng float64 }{{0, 0}, {91, 69}, {41, 181}, {-91, -181}} {
 		e := models.Elon{ID: primitive.NewObjectID(), Title: "Ish", WorkersNeeded: 2, Lat: tc.lat, Lng: tc.lng}
-		if post := Message(e, "testbot"); post.Venue {
-			t.Fatalf("lat=%v lng=%v became a venue", tc.lat, tc.lng)
+		if post := Message(e, "testbot"); post.Map {
+			t.Fatalf("lat=%v lng=%v got a map card", tc.lat, tc.lng)
 		}
 	}
 }
@@ -488,14 +473,14 @@ func TestChannelSendsTheMapCardBeforeTheTextAndNeverTwice(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved := post(t, p, e.ID, testChat)
-	if f.venues != 1 || saved.VenueMessageID != 77 {
-		t.Fatalf("map card not recorded: venues=%d saved=%+v", f.venues, saved)
+	if f.maps != 1 || saved.MapMessageID != 77 {
+		t.Fatalf("map card not recorded: venues=%d saved=%+v", f.maps, saved)
 	}
 	if f.total != 0 || saved.Status != "pending" {
 		t.Fatalf("text send state: total=%d status=%s", f.total, saved.Status)
 	}
-	if f.venueLat != e.Lat || f.venueLng != e.Lng || f.venueTitle != "Yuk tushirish" {
-		t.Fatalf("map card content: %q at %v,%v", f.venueTitle, f.venueLat, f.venueLng)
+	if f.mapLat != e.Lat || f.mapLng != e.Lng {
+		t.Fatalf("map card coordinates: %v,%v", f.mapLat, f.mapLng)
 	}
 
 	f.sendErr = nil
@@ -505,8 +490,8 @@ func TestChannelSendsTheMapCardBeforeTheTextAndNeverTwice(t *testing.T) {
 	if _, err := p.deliverNext(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if f.venues != 1 {
-		t.Fatalf("map card sent %d times", f.venues)
+	if f.maps != 1 {
+		t.Fatalf("map card sent %d times", f.maps)
 	}
 	if f.total != 1 || post(t, p, e.ID, testChat).Status != "sent" {
 		t.Fatalf("text not delivered after retry: total=%d", f.total)
@@ -523,7 +508,7 @@ func TestChannelSkipsTheTextWhenTheMapCardFails(t *testing.T) {
 	if _, err := p.fanOutNext(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	f.venueErr = &tgsend.APIError{Code: 403}
+	f.mapErr = &tgsend.APIError{Code: 403}
 	if _, err := p.deliverNext(context.Background()); err != nil {
 		t.Fatal(err)
 	}
