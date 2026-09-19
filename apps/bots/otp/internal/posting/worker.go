@@ -51,7 +51,7 @@ func (e *Engine) workerHome(ctx context.Context, d *Draft) error {
 	chat := d.ChatID
 	// Xabar ATAYLAB workerMessage orqali emas: u klaviaturani olib tashlaydi,
 	// bu yerda esa aksincha, doimiy menyu o'rnatiladi.
-	welcome := tg.NewMessage(chat, "Ishchi Bormi — kunlik ish toping va arizalaringizni shu botda boshqaring.\n\nPastdagi tugmalar doim shu yerda turadi — buyruqlarni eslab qolish shart emas.")
+	welcome := tg.NewMessage(chat, "Ishchi Bormi — kunlik ish toping va arizalaringizni shu botda boshqaring.")
 	welcome.ReplyMarkup = MainKeyboard()
 	if _, err := e.Bot.Send(welcome); err != nil {
 		return err
