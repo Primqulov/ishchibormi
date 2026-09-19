@@ -552,3 +552,34 @@ func TestEveryRegionHasDistricts(t *testing.T) {
 		}
 	}
 }
+
+// Ro'yxatdan o'tish BUTUNLAY chat ichida bo'lishi kerak: Mini App HTTPS,
+// brauzer freymi va Telegram imzosini talab qiladi, ya'ni u yerda bitta
+// nosozlik butun ro'yxatdan o'tishni yopib qo'yardi. Chatdagi oqim esa
+// hamma joyda — Desktop'da ham — ishlaydi.
+func TestRegistrationNeverOpensTheMiniApp(t *testing.T) {
+	h := workerSetup(t)
+	h.a.newUser = true
+	h.a.profile = Profile{ID: "worker"}
+
+	// Hisobi yo'q odam uchun taklif.
+	h.workerClick("register", "new")
+	if hasMiniAppButton(h) {
+		t.Fatal("registration offer opens the Mini App")
+	}
+	// Butun oqim: rozilik -> kontakt -> ism -> familiya -> viloyat -> tuman.
+	h.flowClick("agree")
+	own := h.message("")
+	own.Contact = &tg.Contact{UserID: 42, PhoneNumber: "998901234567"}
+	h.send(own)
+	h.text("Ali")
+	h.text("Karimov")
+	h.flowClick("r0")
+	h.flowClick("d1")
+	if h.s.draft.Worker != nil || h.a.profile.District == "" {
+		t.Fatal("registration did not finish in chat")
+	}
+	if hasMiniAppButton(h) {
+		t.Fatal("a Mini App button appeared during registration")
+	}
+}
