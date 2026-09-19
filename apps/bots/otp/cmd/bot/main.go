@@ -235,7 +235,7 @@ func main() {
 					}
 					sendOTP(bot, m.Chat.ID,
 						fmt.Sprintf("Qaytib xush kelibsiz!\n\nTasdiqlash kodingiz: `%s`\n\n(Kodni nusxalash uchun ustiga bosing.)\nKodni saytda kiriting. Kod %d daqiqa amal qiladi.",
-							code, int(otpTTL/time.Minute)), webURL)
+							code, int(otpTTL/time.Minute)))
 					delete(pending, m.Chat.ID)
 					continue
 				}
@@ -292,7 +292,7 @@ func main() {
 					_, _ = bot.Send(tgbotapi.NewMessage(m.Chat.ID, "Xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring."))
 					continue
 				}
-				sendOTP(bot, m.Chat.ID, fmt.Sprintf("Tasdiqlash kodingiz: `%s`\n\n(Kodni nusxalash uchun ustiga bosing.)\nKodni saytda kiriting. Kod %d daqiqa amal qiladi.", code, int(otpTTL/time.Minute)), webURL)
+				sendOTP(bot, m.Chat.ID, fmt.Sprintf("Tasdiqlash kodingiz: `%s`\n\n(Kodni nusxalash uchun ustiga bosing.)\nKodni saytda kiriting. Kod %d daqiqa amal qiladi.", code, int(otpTTL/time.Minute)))
 				delete(pending, m.Chat.ID)
 
 			default:
@@ -335,23 +335,24 @@ func sendNoSession(bot *tgbotapi.BotAPI, chat int64, webURL string) {
 	_, _ = bot.Send(msg)
 }
 
-// sendOTP kodni yuboradi va ikkita qadamni qisqartiradi: saytga qaytish
-// tugmasi (foydalanuvchi brauzerdagi varaqni qidirmaydi) va doimiy pastki
-// menyu — u ayni paytda kontakt so'ragan klaviaturani ham almashtiradi.
-func sendOTP(bot *tgbotapi.BotAPI, chat int64, text, webURL string) {
+// sendOTP faqat kodni yuboradi.
+//
+// Ilgari bu yerda "Saytga qaytish" havolasi va undan keyin alohida taklif
+// xabari bo'lardi. Ikkalasi ham olib tashlandi: odam kodni olgani uchun
+// keladi va uni darhol ko'rishi kerak — qo'shimcha tugma bilan matn kodni
+// pastga surib, chatni shovqinga to'ldirardi.
+//
+// Pastki menyu esa AYNI KOD XABARIGA biriktiriladi, alohida xabar bilan
+// emas. Bu ataylab: kontakt so'ragan bir martalik klaviatura shu yerda
+// almashtirilishi kerak, aks holda u chatda osilib qolardi. Ya'ni menyu
+// avvalgidek o'rnatiladi, faqat ortiqcha xabarsiz.
+func sendOTP(bot *tgbotapi.BotAPI, chat int64, text string) {
 	msg := tgbotapi.NewMessage(chat, text)
 	msg.ParseMode = "Markdown"
-	if httpsURL(webURL) {
-		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonURL("🌐 Saytga qaytish", strings.TrimRight(webURL, "/")+"/login")))
-	}
+	msg.ReplyMarkup = posting.MainKeyboard()
 	if _, err := bot.Send(msg); err != nil {
 		log.Print("otp message not delivered")
-		return
 	}
-	menu := tgbotapi.NewMessage(chat, "Bot orqali ham ish topishingiz mumkin — pastdagi tugmalardan foydalaning.")
-	menu.ReplyMarkup = posting.MainKeyboard()
-	_, _ = bot.Send(menu)
 }
 
 func isBotCommand(m *tgbotapi.Message) bool {
