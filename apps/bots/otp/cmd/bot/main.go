@@ -118,6 +118,7 @@ func main() {
 		tgbotapi.BotCommand{Command: "menu", Description: "Bosh menyu"},
 		tgbotapi.BotCommand{Command: "help", Description: "Botdan foydalanish"},
 		tgbotapi.BotCommand{Command: "post", Description: "Mini App orqali e'lon berish"},
+		tgbotapi.BotCommand{Command: "taklif", Description: "Ilova, sayt va kanallarimiz"},
 		tgbotapi.BotCommand{Command: "cancel", Description: "Joriy suhbatni to'xtatish"},
 	))
 	handlePosting := func(u tgbotapi.Update) {

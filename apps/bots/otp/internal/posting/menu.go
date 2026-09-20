@@ -27,12 +27,17 @@ const (
 	btnPostJob  = "➕ E'lon berish"
 	btnRegister = "📝 Ro'yxatdan o'tish"
 	btnHelp     = "ℹ️ Yordam"
+	btnOffer    = "💡 Taklif"
 )
 
 func MainKeyboard() tg.ReplyKeyboardMarkup {
 	kb := tg.NewReplyKeyboard(
 		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnFindJobs), tg.NewKeyboardButton(btnMyApps)),
 		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnPostJob), tg.NewKeyboardButton(btnHelp)),
+		// Taklif ATAYLAB alohida, eni to'liq qatorda: u boshqalaridan farqli
+		// o'laroq oqim boshlamaydi, balki loyihaning qolgan yo'llarini
+		// (ilova, sayt, ikkita kanal) ko'rsatadi — ko'zga tashlanib tursin.
+		tg.NewKeyboardButtonRow(tg.NewKeyboardButton(btnOffer)),
 	)
 	kb.ResizeKeyboard = true
 	return kb
@@ -56,6 +61,8 @@ func KeyboardCommand(text string) string {
 		return "register"
 	case btnHelp:
 		return "help"
+	case btnOffer:
+		return "taklif"
 	}
 	return ""
 }

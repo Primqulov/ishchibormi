@@ -60,7 +60,7 @@ func (e *Engine) workerHome(ctx context.Context, d *Draft) error {
 		tg.NewInlineKeyboardRow(tg.NewInlineKeyboardButtonData("📍 Yaqin ishlarni topish", "jobs:start")),
 		tg.NewInlineKeyboardRow(workerButton("📋 Arizalarim", "apps", "all"), workerButton("✅ Qabul qilingan ishlar", "apps", "accepted")),
 		tg.NewInlineKeyboardRow(workerButton("📨 Kelgan arizalar", "inbox", "pending"), tg.NewInlineKeyboardButtonURL("Mening e'lonlarim", strings.TrimRight(e.WebURL, "/")+"/my-elons")),
-		tg.NewInlineKeyboardRow(workerButton("ℹ️ Qanday ishlaydi?", "help", ""))); err != nil {
+		tg.NewInlineKeyboardRow(workerButton("ℹ️ Qanday ishlaydi?", "help", ""), workerButton("💡 Taklif", "offer", ""))); err != nil {
 		return err
 	}
 	return e.offerRegistration(ctx, d)
@@ -185,6 +185,8 @@ func (e *Engine) handleWorker(ctx context.Context, u tg.Update, d *Draft) (bool,
 			action, id = "alert", "status"
 		case "register":
 			action, id = "register", "new"
+		case "taklif":
+			action = "offer"
 		}
 	}
 	active := d.Worker != nil
@@ -217,12 +219,15 @@ func (e *Engine) handleWorker(ctx context.Context, u tg.Update, d *Draft) (bool,
 		return true, e.continueWorker(ctx, d, u.UpdateID, m, "")
 	}
 	d.Worker = nil
-	if action == "home" || action == "help" || action == "post" {
+	if action == "home" || action == "help" || action == "post" || action == "offer" {
 		if err := e.saveWorker(ctx, d, u.UpdateID); err != nil {
 			return true, err
 		}
 		if action == "help" {
-			return true, e.workerMessage(d.ChatID, "0. /register → ro'yxatdan o'tish: rozilik, o'z telefoningiz va ism/hudud. Ish qidirish uchun shart emas, ariza berish uchun kerak.\n1. /jobs → joylashuvingizni yuboring (kompyuterdan kirgan bo'lsangiz «🏙 Viloyat bo'yicha»), so'ng sana va ish turini tanlang.\n2. «Ariza berish» → o'z telefoningizni ulashing, necha kishi borishingizni tanlab tasdiqlang.\n3. /applications orqali javobni kuzating. Ariza yuborish ishga qabul qilindingiz degani emas.\n4. Qabul qilingach, ish beruvchi bilan bog'lanib, vaqt va manzilni kelishib oling.\n5. Ish haqiqatan tugagach, «Ishni tugatdim»ni tasdiqlang. Bu to'lov qabul qilinganini tasdiqlamaydi.\n6. /alerts — ish signali: belgilagan hududingizda yangi e'lon chiqqanda bot o'zi xabar beradi.\n\nBora olmasangiz, arizani sababini yozib bekor qiling.\nPastdagi tugmalar doim shu yerda: ish topish, arizalarim, e'lon berish.\n/menu — bosh menyu. /post — Mini App orqali e'lon berish.", tg.NewInlineKeyboardRow(workerButton("Bosh menyu", "home", "")))
+			return true, e.workerMessage(d.ChatID, "0. /register → ro'yxatdan o'tish: rozilik, o'z telefoningiz va ism/hudud. Ish qidirish uchun shart emas, ariza berish uchun kerak.\n1. /jobs → joylashuvingizni yuboring (kompyuterdan kirgan bo'lsangiz «🏙 Viloyat bo'yicha»), so'ng sana va ish turini tanlang.\n2. «Ariza berish» → o'z telefoningizni ulashing, necha kishi borishingizni tanlab tasdiqlang.\n3. /applications orqali javobni kuzating. Ariza yuborish ishga qabul qilindingiz degani emas.\n4. Qabul qilingach, ish beruvchi bilan bog'lanib, vaqt va manzilni kelishib oling.\n5. Ish haqiqatan tugagach, «Ishni tugatdim»ni tasdiqlang. Bu to'lov qabul qilinganini tasdiqlamaydi.\n6. /alerts — ish signali: belgilagan hududingizda yangi e'lon chiqqanda bot o'zi xabar beradi.\n\nBora olmasangiz, arizani sababini yozib bekor qiling.\nPastdagi tugmalar doim shu yerda: ish topish, arizalarim, e'lon berish.\n/menu — bosh menyu. /post — Mini App orqali e'lon berish.\n/taklif — Android ilova, sayt va Telegram kanallarimiz: yangi e'lonlar o'zi sizga keladi.", tg.NewInlineKeyboardRow(workerButton("Bosh menyu", "home", "")))
+		}
+		if action == "offer" {
+			return true, e.showOffer(d.ChatID)
 		}
 		if action == "post" {
 			return true, e.miniAppMessage(d.ChatID, "E'lon berish uchun Mini App'ni oching.")
