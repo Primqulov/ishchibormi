@@ -171,11 +171,21 @@ func appsScope(q url.Values) string {
 // Telefon esa ATAYLAB bor: Figma 3.6 da «Ishchi» katagi ism ostida
 // raqamni ko'rsatadi va ism bo'lmasa raqamning O'ZI sarlavha bo'ladi —
 // ya'ni bu ekranda telefon "qo'shimcha tafsilot" emas, ustunning mazmuni.
+//
+// `workerId` esa MOBIL uchun qo'shildi: Figma 3.6b kartochkasida «Ishchi
+// profili» tugmasi bor va u 3.4b — ishchining batafsil sahifasiga olib
+// boradi (3.6b-a · 4-bo'lim: «Mobilda ustun yo'q, lekin ishchiga o'tish
+// ehtiyoji qoladi»). Vebda bunday havola yo'q, shuning uchun ID ilgari
+// kerak bo'lmagan. Telefon bo'yicha ishchini qidirib topish yo'li
+// ATAYLAB tanlanmadi: bitta raqam ostida hisob qayta ochilgan bo'lishi
+// mumkin va admin BOSHQA profilga tushib qolardi. ID o'zi shaxsiy
+// ma'lumot emas — qator allaqachon ism va telefonni ko'rsatib turibdi.
 type adminApplicationRow struct {
 	ID           primitive.ObjectID `bson:"_id" json:"id"`
 	ElonID       primitive.ObjectID `bson:"elonId" json:"elonId"`
 	ElonTitle    string             `bson:"elonTitle" json:"elonTitle"`
 	CategoryName string             `bson:"elonCategoryName" json:"categoryName"`
+	WorkerID     primitive.ObjectID `bson:"workerId" json:"workerId"`
 	WorkerName   string             `bson:"workerName" json:"workerName"`
 	WorkerPhone  string             `bson:"workerPhone" json:"workerPhone"`
 	Amount       int64              `bson:"amount" json:"amount"`
@@ -189,6 +199,7 @@ var appRowProjection = bson.M{
 	"elonId":           1,
 	"elonTitle":        1,
 	"elonCategoryName": 1,
+	"workerId":         1,
 	"workerName":       1,
 	"workerPhone":      1,
 	"amount":           1,
