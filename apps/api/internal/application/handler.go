@@ -253,6 +253,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request, decision string
 	}
 	now := time.Now()
 	people := peopleOf(app)
+	busyDay := "" // qabul qilishda band qilingan kun (daylock.go)
 	// Qabul qilishda ishchilar sonini inobatga olamiz: guruh arizasidagi kishilar
 	// soni qolgan bo'sh o'rindan ko'p bo'lsa, qabul qilib bo'lmaydi (ish beruvchi
 	// mos kishilik arizani tanlaydi).
@@ -276,16 +277,29 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request, decision string
 			httpx.Err(w, httpx.NewError(409, "worker_busy_day", "Bu ishchi shu kunga boshqa ishga qabul qilingan."))
 			return
 		}
+		// Yuqoridagi tekshiruv faqat do'stona xato uchun; parallel qabul
+		// qilishda yagona ishonchli to'siq — shu atomik qulf (daylock.go).
+		busyDay = startDay(pre.StartDate)
+		if err := h.claimWorkerDay(r.Context(), app.WorkerID, busyDay, appID); err != nil {
+			if errors.Is(err, errWorkerBusyDay) {
+				httpx.Err(w, httpx.NewError(409, "worker_busy_day", "Bu ishchi shu kunga boshqa ishga qabul qilingan."))
+				return
+			}
+			httpx.Err(w, err)
+			return
+		}
 	}
 	set := bson.M{"status": decision, "decidedAt": now}
 	transition, err := h.Apps.UpdateOne(r.Context(),
 		bson.M{"_id": appID, "employerId": uid, "status": "pending"},
 		bson.M{"$set": set})
 	if err != nil {
+		h.releaseWorkerDay(r.Context(), app.WorkerID, busyDay, appID)
 		httpx.Err(w, err)
 		return
 	}
 	if transition.ModifiedCount != 1 {
+		h.releaseWorkerDay(r.Context(), app.WorkerID, busyDay, appID)
 		httpx.Err(w, httpx.NewError(409, "state_changed", "application state already changed"))
 		return
 	}
@@ -311,6 +325,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request, decision string
 			_, _ = h.Apps.UpdateOne(r.Context(),
 				bson.M{"_id": appID, "status": "accepted", "decidedAt": now},
 				bson.M{"$set": bson.M{"status": "pending"}, "$unset": bson.M{"decidedAt": ""}})
+			h.releaseWorkerDay(r.Context(), app.WorkerID, busyDay, appID)
 			httpx.Err(w, httpx.NewError(409, "not_enough_slots", "Ish o'rinlari hozirgina to'ldi."))
 			return
 		}

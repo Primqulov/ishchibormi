@@ -63,6 +63,11 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		// bajarilardi, xuddi workerId/employerId juftliklari kabi.
 		{"applications", mongo.IndexModel{Keys: bson.D{{Key: "elonId", Value: 1}, {Key: "appliedAt", Value: -1}}}},
 
+		// "Bir kunga bitta ish" qulflari (internal/application/daylock.go).
+		// Unikallikni _id ({ishchi}:{kun}) o'zi beradi; bu faqat o'tgan
+		// kunlarning qulflarini yig'ishtiradigan TTL.
+		{"worker_day_locks", mongo.IndexModel{Keys: bson.D{{Key: "expiresAt", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(0)}},
+
 		{"categories", mongo.IndexModel{Keys: bson.D{{Key: "slug", Value: 1}}, Options: options.Index().SetUnique(true)}},
 
 		{"notifications", mongo.IndexModel{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}}},
