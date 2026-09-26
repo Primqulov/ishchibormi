@@ -15,7 +15,7 @@ Tailwind) veb-panel va Go Telegram botlari.
 | Bot       | Go (`go-telegram-bot-api/v5`) |
 | DB        | MongoDB 7 (OTP uchun TTL kolleksiya — Redis kerak emas) |
 | Fayllar   | AWS S3 **yoki** lokal disk (S3 sozlanmasa avtomatik lokal) |
-| Infra     | Docker + docker-compose, GitHub Actions CI/CD → Hetzner Cloud server (Caddy + TLS) |
+| Infra     | Docker + docker-compose, GitHub Actions CI/CD → Contabo VPS (Caddy + TLS) |
 
 ---
 
@@ -41,7 +41,7 @@ faqat butun tizimga tegishli fayllar (compose, `.env`, CI) turadi.
 │       └── otp/              # OTP yetkazuvchi bot (Mongo'ga yozadi)
 ├── deploy/                   # Server setup, Caddyfile, backup, dev overlay
 ├── scripts/                  # play-preflight.sh
-├── .github/workflows/        # CI/CD pipeline (test + Hetzner deploy)
+├── .github/workflows/        # CI/CD pipeline (test + prod deploy)
 ├── docker-compose.yml        # mongo + backend + bot + frontend
 ├── Makefile
 ├── .env.example              # BITTA .env — barcha servislar shundan o'qiydi
@@ -316,12 +316,12 @@ qaytadi (botsiz test uchun).
 
 ---
 
-## 8. CI/CD → Hetzner
+## 8. CI/CD → prod server (Contabo VPS)
 
 `.github/workflows/ci-cd.yml`:
 - **test** (har push/PR): `apps/api` va OTP boti uchun `go vet` + `go test`,
   `apps/web` uchun `npm ci` + `lint` + `build`.
-- **deploy** (faqat `main`'ga push, test o'tgach): Hetzner serverga SSH
+- **deploy** (faqat `main`'ga push, test o'tgach): prod serverga SSH
   orqali `git reset --hard origin/main` + `docker compose up --build`.
   ⚠️ `main`'ga push = **production deploy**.
 

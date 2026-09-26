@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Yangi Hetzner Cloud serverni (Ubuntu 24.04/26.04 LTS) noldan ishga tayyorlaydi.
+# Yangi prod serverni (Contabo VPS yoki boshqa) (Ubuntu 24.04/26.04 LTS) noldan ishga tayyorlaydi.
 #
 # ISHLATISH — serverga root bo'lib kirib:
 #   scp deploy/server-setup.sh root@<SERVER_IP>:~/
@@ -195,7 +195,6 @@ cat <<INFO
       CORS_ORIGINS=https://$DOMAIN
       UPLOAD_PUBLIC_BASE=https://$DOMAIN/uploads
       NEXT_PUBLIC_API_BASE=https://$DOMAIN
-      NEXT_PUBLIC_WS_BASE=wss://$DOMAIN
 
  3) Birinchi ishga tushirish:
       cd $PROJECT_DIR && docker compose up -d --build

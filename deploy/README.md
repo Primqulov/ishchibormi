@@ -5,11 +5,11 @@ Ishga tushirish bilan bog'liq fayllar. Ilova kodi bu yerda emas — u `apps/` da
 | Fayl | Vazifasi |
 |------|----------|
 | `docker-compose.dev.yml` | Lokal dev overlay (APP_ENV=dev, OTP_DEV_RETURN, localhost CORS) |
-| `server-setup.sh` | Yangi Hetzner Cloud serverni noldan tayyorlaydi (Docker, Caddy, ufw, swap, deploy user, cron) |
+| `server-setup.sh` | Yangi prod serverni (hozir Contabo VPS) noldan tayyorlaydi (Docker, Caddy, ufw, swap, deploy user, cron) |
 | `Caddyfile` | Xostdagi Caddy konfiguratsiyasi — TLS, uchta xost (ommaviy sayt, mobil API, boshqaruv paneli) |
 | `backup-mongo.sh` | Konteyner Mongo'ning kunlik gzip zaxirasi (7 kun saqlanadi) |
 
-## Production — Hetzner Cloud server
+## Production — Contabo VPS
 
 ```
 Internet → :443 Caddy (xost, avtomatik Let's Encrypt)

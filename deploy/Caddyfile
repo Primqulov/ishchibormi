@@ -22,7 +22,7 @@
 	}
 }
 
-# Caddy — TLS terminator va reverse proxy (Hetzner server, XOSTDA ishlaydi).
+# Caddy — TLS terminator va reverse proxy (prod server, XOSTDA ishlaydi).
 #
 # Nega konteynerda emas, xostda: docker-compose backend'ni 127.0.0.1:8080 ga,
 # frontend'ni 127.0.0.1:3000 ga bog'laydi (tashqi dunyoga OCHIQ EMAS). Ya'ni
