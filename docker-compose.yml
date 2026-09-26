@@ -8,7 +8,7 @@ services:
     # Faqat 127.0.0.1 ga bog'lanadi — DB porti hech qachon tashqi dunyoga
     # ochilmaydi (serverda ufw ham 27018 ni bloklaydi).
     #
-    # PRODUCTION (Hetzner Cloud server): baza shu konteynerda, ma'lumot
+    # PRODUCTION (Contabo VPS): baza shu konteynerda, ma'lumot
     # `mongo_data` volume'ida. Ya'ni server o'chsa/volume yo'qolsa ma'lumot ham
     # ketadi — shuning uchun deploy/backup-mongo.sh kunlik arxiv oladi.
     # Boshqarilayotgan baza (masalan MongoDB Atlas) kerak bo'lsa: .env dagi
@@ -145,7 +145,6 @@ services:
       # qiymatlar ishlatiladi.
       args:
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-https://ishchibormi.uz}
-        NEXT_PUBLIC_WS_BASE: ${NEXT_PUBLIC_WS_BASE:-wss://ishchibormi.uz}
         NEXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-Ishchibormibot}
         # Maxfiy: .env dan keladi, standart qiymati ATAYLAB yo'q. Bo'sh
         # bo'lsa panel eski joyida (/admin) ochilaveradi.
@@ -157,11 +156,13 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:3000:3000"
-    env_file: .env
+    # `env_file: .env` ATAYLAB yo'q: .env da JWT sirlari, bot tokenlari va
+    # boshqa backend sirlari turadi, frontend esa faqat quyidagi kalitlarni
+    # o'qiydi (apps/web ichida process.env bo'yicha tekshirilgan). Yangi
+    # o'zgaruvchi kerak bo'lsa — shu ro'yxatga aniq qo'shing.
     environment:
       NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-https://ishchibormi.uz}
       MINIAPP_API_BASE_URL: http://backend:8080
-      NEXT_PUBLIC_WS_BASE: ${NEXT_PUBLIC_WS_BASE:-wss://ishchibormi.uz}
       NEXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-Ishchibormibot}
       ADMIN_PANEL_HOST: ${ADMIN_PANEL_HOST:-}
 

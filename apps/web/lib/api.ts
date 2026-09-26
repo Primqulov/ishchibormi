@@ -4,7 +4,6 @@ import { isMiniAppPage } from "@/lib/miniapp";
 import { fetchMiniApp, isTransientMiniAppStatus } from "@/lib/miniapp-transport";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
-export const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE || "ws://localhost:8080";
 
 /**
  * Admin so'rovlari qaysi manzilga ketishi.

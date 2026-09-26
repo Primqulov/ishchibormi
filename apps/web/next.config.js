@@ -11,7 +11,6 @@ function originOf(raw, fallback) {
 }
 
 const apiOrigin = originOf(process.env.NEXT_PUBLIC_API_BASE, "http://localhost:8080");
-const wsOrigin = originOf(process.env.NEXT_PUBLIC_WS_BASE, "ws://localhost:8080");
 const devEval = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
 const csp = [
   "default-src 'self'",
@@ -26,7 +25,7 @@ const csp = [
   // nominatim — MapPicker'da tanlangan nuqtaning manzil matnini olish uchun
   // (teskari geokodlash). Ro'yxatga qo'shilmasa fetch bloklanadi va xaritada
   // joy tanlaganda manzil yozuvi umuman chiqmaydi.
-  `connect-src 'self' ${apiOrigin} ${wsOrigin} https://nominatim.openstreetmap.org`,
+  `connect-src 'self' ${apiOrigin} https://nominatim.openstreetmap.org`,
   "worker-src 'self' blob:",
   "manifest-src 'self'",
 ].join("; ");

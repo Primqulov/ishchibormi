@@ -40,7 +40,6 @@ export default defineConfig({
       timeout: 120_000,
       env: {
         NEXT_PUBLIC_API_BASE: apiURL,
-        NEXT_PUBLIC_WS_BASE: "ws://127.0.0.1:4318",
         NEXT_PUBLIC_SITE_URL: baseURL,
         NEXT_TELEMETRY_DISABLED: "1",
       },

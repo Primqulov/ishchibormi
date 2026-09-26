@@ -18,9 +18,10 @@
  * SHU matnni ko'radi (`internal/admin/errai.go`), ya'ni ekranda ko'ringan
  * narsa modelga borgan narsa bilan bir xil.
  *
- * Server javob bermasa (demo yoki tarmoq), ekran namunaviy matnga tushadi
+ * Server javob bermasa (tarmoq yoki xato), ekran shu HAQIQIY ma'lumotdan
+ * brauzerda yig'ilgan zaxira matnga tushadi (`xatoKontekst.ts`)
  * va buni "namuna matn" nishoni bilan OCHIQ aytadi: admin haqiqiy
- * diagnostikani soxta matndan ajrata olishi shart.
+ * server matnini mahalliy zaxiradan ajrata olishi shart.
  *
  * # XAVFSIZLIK
  *
@@ -65,7 +66,7 @@ import {
   tugma,
 } from "@/components/admin/ui";
 import { FOKUS, Izohcha, Karta, Nishon, nusxaOl } from "@/components/admin/xatoQismlar";
-import { KONTEKST_YOQ, demoKontekst } from "@/components/admin/xatoDemo";
+import { KONTEKST_YOQ, kontekstYasash } from "@/components/admin/xatoKontekst";
 import { son } from "@/components/admin/xato";
 
 type Format = "md" | "json" | "txt";
@@ -137,7 +138,6 @@ export default function AiKontekst({
   xabar,
   tanlangan,
   setTanlangan,
-  demo,
   qoldi,
   tgBoshla,
   guruhYangila,
@@ -147,7 +147,6 @@ export default function AiKontekst({
   /** Bo'limlar tanlovi YUQORIDA yashaydi — AI tahlili ham shuni yuboradi. */
   tanlangan: XatoKontekstKalit[];
   setTanlangan: (f: (oldin: XatoKontekstKalit[]) => XatoKontekstKalit[]) => void;
-  demo: boolean;
   /** Telegram sovish oynasi — sarlavhadagi tugma bilan BITTA (server ham bitta). */
   qoldi: number;
   tgBoshla: (vaqt: number) => void;
@@ -186,8 +185,8 @@ export default function AiKontekst({
     kesh.current.clear();
   }, [d.group.id, d.group.count]);
 
-  /** Server yo'q bo'lsa ko'rsatiladigan namunaviy matn. */
-  const zaxira = useMemo(() => demoKontekst(d, format, inc), [d, format, inc]);
+  /** Server javob bermasa ko'rsatiladigan, mahalliy yig'ilgan matn. */
+  const zaxira = useMemo(() => kontekstYasash(d, format, inc), [d, format, inc]);
 
   useEffect(() => {
     if (inc.length === 0) return; // pastdagi qoida buni oldini oladi
@@ -195,12 +194,6 @@ export default function AiKontekst({
     if (keshda) {
       setServerK(keshda);
       setNamuna(false);
-      setYangilanmoqda(false);
-      return;
-    }
-    if (demo) {
-      setServerK(null);
-      setNamuna(true);
       setYangilanmoqda(false);
       return;
     }
@@ -244,7 +237,7 @@ export default function AiKontekst({
       bekor = true;
       window.clearTimeout(t);
     };
-  }, [d.group.id, format, inc, kalit, demo, xabar]);
+  }, [d.group.id, format, inc, kalit, xabar]);
 
   const kontekst = serverK ?? zaxira;
 
@@ -355,10 +348,6 @@ export default function AiKontekst({
           "Kontekst juda tez-tez so'ralmoqda",
           "Kontekst bilan yuborish ham eksport hisoblanadi. Bir necha daqiqadan keyin urinib ko'ring.",
         );
-      } else if (demo && err?.code !== "forbidden") {
-        setTgOyna(false);
-        tgBoshla(Date.now());
-        xabar("ok", "Telegram'ga yuborildi", "Demo — backend ulanmagan, haqiqiy xabar ketmadi.");
       } else {
         xabar(
           "xato",
@@ -369,7 +358,7 @@ export default function AiKontekst({
     } finally {
       setTgYuborilmoqda(false);
     }
-  }, [d.group.id, d.group.ref, demo, guruhYangila, inc, tgBoshla, tgYuborilmoqda, xabar]);
+  }, [d.group.id, d.group.ref, guruhYangila, inc, tgBoshla, tgYuborilmoqda, xabar]);
 
   const qatorlar = useMemo(() => kontekst.text.split("\n"), [kontekst.text]);
 

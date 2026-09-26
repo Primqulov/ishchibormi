@@ -66,7 +66,7 @@ import {
   KartaAmal,
   Nishon,
 } from "@/components/admin/xatoQismlar";
-import { qurilmaYorliq } from "@/components/admin/xatoDemo";
+import { qurilmaYorliq } from "@/components/admin/xatoKontekst";
 import {
   HOLAT,
   HOLAT_TARTIBI,

@@ -28,7 +28,5 @@ services:
     build:
       args:
         NEXT_PUBLIC_API_BASE: http://localhost:8080
-        NEXT_PUBLIC_WS_BASE: ws://localhost:8080
     environment:
       NEXT_PUBLIC_API_BASE: http://localhost:8080
-      NEXT_PUBLIC_WS_BASE: ws://localhost:8080

@@ -12,15 +12,10 @@
  *
  * # MA'LUMOT QAYERDAN
  *
- * Avval `GET /api/admin/errors/{id}` so'raladi. Backend hali bu endpointni
- * bermaydi, shuning uchun so'rov yiqilsa DEMO to'plamiga o'tamiz
- * (`components/admin/xatoDemo.ts`) va ekran boshida SARIQ ogohlantirish
- * chiqadi. Ogohlantirish majburiy: o'ylab topilgan 46 ta hodisani
- * haqiqiy deb o'qigan admin noto'g'ri qaror qabul qiladi.
- *
- * `forbidden` xatosida demo KO'RSATILMAYDI — ruxsati yo'q odamga demo
- * ko'rsatish "ma'lumot bor, lekin sizga emas" degan chalg'ituvchi holat
- * yaratardi va ekran mazmunini yashirish qoidasini buzardi.
+ * Faqat `GET /api/admin/errors/{id}` — o'ylab topilgan zaxira ma'lumot
+ * YO'Q. So'rov yiqilsa ekran xatoni ochiq ko'rsatadi: diagnostika
+ * ekranida soxta raqamni haqiqiy deb o'qigan admin noto'g'ri qaror
+ * qabul qiladi.
  *
  * # XAVFSIZLIK
  *
@@ -51,7 +46,6 @@ import {
   AdminErrorDetail,
   AdminErrorGroup,
   AdminRole,
-  XatoAmal,
   XatoHolat,
   XatoKontekstKalit,
   XatoMasul,
@@ -91,7 +85,7 @@ import {
   kunSoat,
   son,
 } from "@/components/admin/xato";
-import { DEMO_MASULLAR, DEMO_YOQILGAN, demoBatafsil, niqobla } from "@/components/admin/xatoDemo";
+import { niqobla } from "@/components/admin/xatoKontekst";
 import AiKontekst, { KONTEKST_SUKUT } from "./AiKontekst";
 import AiTahlil from "./AiTahlil";
 import {
@@ -152,7 +146,6 @@ export default function XatolikBatafsil() {
   const [d, setD] = useState<AdminErrorDetail | null>(null);
   const [yuklanmoqda, setYuklanmoqda] = useState(true);
   const [xato, setXato] = useState<APIError | null>(null);
-  const [demo, setDemo] = useState(false);
   const [rol, setRol] = useState<AdminRole | null>(null);
   /**
    * `hozir` DOIM `useEffect` da o'rnatiladi.
@@ -259,20 +252,11 @@ export default function XatolikBatafsil() {
         );
         if (men !== soravRaqami.current) return;
         setD(res);
-        setDemo(false);
         setXato(null);
       } catch (e) {
         if (men !== soravRaqami.current) return;
-        const err = (e as APIError) ?? null;
-        if (DEMO_YOQILGAN && err?.code !== "forbidden") {
-          setD(demoBatafsil(id, Date.now()));
-          setDemo(true);
-          setXato(null);
-        } else {
-          setD(null);
-          setDemo(false);
-          setXato(err);
-        }
+        setD(null);
+        setXato((e as APIError) ?? null);
       } finally {
         if (men === soravRaqami.current) setYuklanmoqda(false);
       }
@@ -300,20 +284,15 @@ export default function XatolikBatafsil() {
         } as any);
         if (!bekor) setMasullar(res.items ?? []);
       } catch {
-        // Ro'yxat kelmasa oyna bo'sh qolmasin — demo ro'yxati zaxira.
-        if (!bekor) setMasullar(DEMO_MASULLAR);
+        // Ro'yxat kelmasa bo'sh qoladi — o'ylab topilgan ism KO'RSATILMAYDI.
+        // Oynalarda "Men olaman" / "Biriktirilmasin" varianti baribir bor.
+        if (!bekor) setMasullar([]);
       }
     })();
     return () => {
       bekor = true;
     };
   }, []);
-
-  /** Ko'rsatiladigan ro'yxat: server bermasa demo zaxirasi (uch joyda kerak). */
-  const masulRoyxat = useMemo(
-    () => (masullar.length > 0 ? masullar : DEMO_MASULLAR),
-    [masullar],
-  );
 
   /**
    * Yorliqdan mas'ulning id'sini topish.
@@ -324,8 +303,8 @@ export default function XatolikBatafsil() {
    * `startsWith` bilan: yorliqqa rol qo'shilgan, ro'yxatda esa faqat nom.
    */
   const masulId = useCallback(
-    (yorliq?: string) => masulRoyxat.find((m) => yorliq?.startsWith(m.label))?.id ?? "",
-    [masulRoyxat],
+    (yorliq?: string) => masullar.find((m) => yorliq?.startsWith(m.label))?.id ?? "",
+    [masullar],
   );
 
   /* ── Ruxsat ────────────────────────────────────────────────────── */
@@ -350,97 +329,14 @@ export default function XatolikBatafsil() {
 
   /* ── O'zgarishlarni saqlash ────────────────────────────────────────
      Holat, izoh, mas'ul va Telegram — to'rttasi ham o'z endpointiga
-     boradi va javobda YANGILANGAN guruhni qaytaradi. So'rov yiqilsa va
-     biz demo rejimida bo'lsak, o'zgarish faqat shu ekranda qo'llanadi va
-     xabarchada bu OCHIQ aytiladi: yolg'on muvaffaqiyat eng yomon
-     variant. */
-
-  const kim = useMemo(() => (rol ? `Siz · ${rol}` : "Siz"), [rol]);
+     boradi va javobda YANGILANGAN guruhni qaytaradi. So'rov yiqilsa
+     o'zgarish ekranda QO'LLANMAYDI va xabarchada xato ochiq aytiladi:
+     yolg'on muvaffaqiyat eng yomon variant. */
 
   /** Server qaytargan guruh bilan almashtirish (tarix ham yangilanadi). */
   const guruhYangila = useCallback((gr: AdminErrorGroup) => {
     setD((oldin) => (oldin ? { ...oldin, group: gr } : oldin));
   }, []);
-
-  const yozuvQosh = useCallback(
-    (kind: XatoAmal["kind"], text: string) => {
-      setD((oldin) =>
-        oldin
-          ? {
-              ...oldin,
-              group: {
-                ...oldin.group,
-                activity: [
-                  ...(oldin.group.activity ?? []),
-                  { kind, text, actor: kim, at: new Date().toISOString() },
-                ],
-              },
-            }
-          : oldin,
-      );
-    },
-    [kim],
-  );
-
-  /**
-   * Demo rejimidagi mahalliy o'zgarish.
-   *
-   * `qosh` — holat oynasining shartli maydonlari. Ular bu yerda ham
-   * qo'llanadi, aks holda demo'da "Bartaraf etilmoqda" bosilgach kartadagi
-   * "Rejalashtirilgan versiya" bo'sh qolib, admin maydon ISHLAMAYAPTI deb
-   * o'ylardi — holbuki server ulangan paytda hammasi yoziladi.
-   */
-  const mahalliyHolat = useCallback(
-    (
-      yangi: XatoQolHolat,
-      izoh: string,
-      qosh: { masul?: string; reja?: string; tuzatilgan?: string } = {},
-    ) => {
-      setD((oldin) => {
-        if (!oldin) return oldin;
-        const eski = oldin.group.status;
-        const hozirIso = new Date().toISOString();
-        return {
-          ...oldin,
-          group: {
-            ...oldin.group,
-            status: yangi,
-            note: izoh || oldin.group.note,
-            ignoreReason: yangi === "ignored" ? izoh : oldin.group.ignoreReason,
-            resolvedAt: yangi === "resolved" ? hozirIso : oldin.group.resolvedAt,
-            // Mas'ul va sana faqat "fixing" da: serverda ham `startedAt`
-            // aynan shu o'tishda yoziladi va u "Boshlanganidan beri"
-            // hisobining tayanchi.
-            assignee: yangi === "fixing" ? (qosh.masul ?? oldin.group.assignee ?? kim) : oldin.group.assignee,
-            startedAt: yangi === "fixing" ? (oldin.group.startedAt ?? hozirIso) : oldin.group.startedAt,
-            plannedVersion: qosh.reja || oldin.group.plannedVersion,
-            fixNote: yangi === "resolved" && izoh ? izoh : oldin.group.fixNote,
-            resolvedBy: yangi === "resolved" ? kim : oldin.group.resolvedBy,
-            // `closedVersion` ham yoziladi: regressiya tekshiruvi ("Eski
-            // versiyalarda") aynan shu maydonga qaraydi.
-            fixedVersion: qosh.tuzatilgan || oldin.group.fixedVersion,
-            closedVersion: qosh.tuzatilgan || oldin.group.closedVersion,
-            activity: [
-              ...(oldin.group.activity ?? []),
-              {
-                kind: "status" as const,
-                // Satr SERVERDAGI yozuv bilan bir xil tuzilishda ("· reja:",
-                // "· versiya:") — demo va haqiqiy tarix bir xil o'qilsin.
-                text:
-                  `${HOLAT[eski].nomi} → ${HOLAT[yangi].nomi} deb belgilandi` +
-                  (qosh.reja ? ` · reja: ${qosh.reja}` : "") +
-                  (qosh.tuzatilgan ? ` · versiya: ${qosh.tuzatilgan}` : "") +
-                  (izoh ? ` — ${izoh}` : ""),
-                actor: kim,
-                at: hozirIso,
-              },
-            ],
-          },
-        };
-      });
-    },
-    [kim],
-  );
 
   /* ── Amallar ───────────────────────────────────────────────────── */
 
@@ -513,7 +409,7 @@ export default function XatolikBatafsil() {
     const v = versiya.trim().slice(0, VERSIYA_ENG_KOP);
     const reja = yangi === "fixing" ? v : "";
     const tuzatilgan = yangi === "resolved" ? v : "";
-    const tanlanganMasul = yangi === "fixing" ? masulRoyxat.find((m) => m.id === holatMasul) : undefined;
+    const tanlanganMasul = yangi === "fixing" ? masullar.find((m) => m.id === holatMasul) : undefined;
 
     // Xabarcha sarlavhasida VERSIYA ham turadi ("Bartaraf etildi ·
     // 1.4.3 (121)"): admin yozgan raqamni darhol ko'rib, xato terilgan
@@ -557,33 +453,16 @@ export default function XatolikBatafsil() {
       yukla(true);
     } catch (e) {
       const err = e as APIError | undefined;
-      if (demo && err?.code !== "forbidden") {
-        mahalliyHolat(yangi, izoh, {
-          masul: tanlanganMasul ? `${tanlanganMasul.label} · ${tanlanganMasul.role}` : undefined,
-          reja,
-          tuzatilgan,
-        });
-        xabarQosh(
-          "ok",
-          sarlavha,
-          "Demo — backend ulanmagan, o'zgarish faqat shu ekranda ko'rinadi.",
-        );
-        setOyna(null);
-        setMatn("");
-        setVersiya("");
-        setTasdiq(false);
-      } else {
-        xabarQosh(
-          "xato",
-          "Amalni bajarib bo'lmadi",
-          err?.code === "forbidden"
-            ? "E'tiborsiz qoldirish faqat superadmin uchun."
-            : err?.code === "reason_required"
-              ? `Sabab kamida ${SABAB_ENG_KAM} belgi bo'lishi kerak.`
-              : err?.message || "Server javob bermadi. Qayta urinib ko'ring.",
-        );
-        setTasdiq(false);
-      }
+      xabarQosh(
+        "xato",
+        "Amalni bajarib bo'lmadi",
+        err?.code === "forbidden"
+          ? "E'tiborsiz qoldirish faqat superadmin uchun."
+          : err?.code === "reason_required"
+            ? `Sabab kamida ${SABAB_ENG_KAM} belgi bo'lishi kerak.`
+            : err?.message || "Server javob bermadi. Qayta urinib ko'ring.",
+      );
+      setTasdiq(false);
     } finally {
       setSaqlanmoqda(false);
     }
@@ -593,12 +472,10 @@ export default function XatolikBatafsil() {
     matn,
     versiya,
     holatMasul,
-    masulRoyxat,
+    masullar,
     tasdiq,
-    demo,
     xabarQosh,
     yukla,
-    mahalliyHolat,
     guruhYangila,
   ]);
 
@@ -624,30 +501,19 @@ export default function XatolikBatafsil() {
       xabarQosh("ok", "Izoh qo'shildi", `${g.ref} · amallar tarixiga yozildi.`);
     } catch (e) {
       const err = e as APIError | undefined;
-      if (demo && err?.code !== "forbidden") {
-        yozuvQosh("note", t);
-        setOyna(null);
-        setMatn("");
-        xabarQosh(
-          "ok",
-          "Izoh qo'shildi",
-          "Demo — backend ulanmagan, yozuv faqat shu ekranda ko'rinadi.",
-        );
-      } else {
-        xabarQosh(
-          "xato",
-          "Izohni saqlab bo'lmadi",
-          err?.message || "Server javob bermadi. Qayta urinib ko'ring.",
-        );
-      }
+      xabarQosh(
+        "xato",
+        "Izohni saqlab bo'lmadi",
+        err?.message || "Server javob bermadi. Qayta urinib ko'ring.",
+      );
     } finally {
       setSaqlanmoqda(false);
     }
-  }, [g, matn, demo, guruhYangila, yozuvQosh, xabarQosh]);
+  }, [g, matn, guruhYangila, xabarQosh]);
 
   const masulSaqla = useCallback(async () => {
     if (!g) return;
-    const tanlangan = masulRoyxat.find((m) => m.id === masul);
+    const tanlangan = masullar.find((m) => m.id === masul);
     setSaqlanmoqda(true);
     try {
       // Bo'sh `assigneeId` — biriktirishni olib tashlash (server shunday
@@ -666,29 +532,17 @@ export default function XatolikBatafsil() {
       );
     } catch (e) {
       const err = e as APIError | undefined;
-      if (demo && err?.code !== "forbidden") {
-        const yorliq = tanlangan ? tanlangan.label : undefined;
-        setD((oldin) => (oldin ? { ...oldin, group: { ...oldin.group, assignee: yorliq } } : oldin));
-        yozuvQosh("assign", yorliq ? `Mas'ul: ${yorliq}` : "Mas'ul olib tashlandi");
-        setOyna(null);
-        xabarQosh(
-          "ok",
-          yorliq ? "Mas'ul biriktirildi" : "Mas'ul olib tashlandi",
-          "Demo — backend ulanmagan, o'zgarish faqat shu ekranda ko'rinadi.",
-        );
-      } else {
-        xabarQosh(
-          "xato",
-          "Mas'ulni o'zgartirib bo'lmadi",
-          err?.code === "bad_assignee"
-            ? "Bu admin topilmadi yoki hisobi faol emas."
-            : err?.message || "Server javob bermadi.",
-        );
-      }
+      xabarQosh(
+        "xato",
+        "Mas'ulni o'zgartirib bo'lmadi",
+        err?.code === "bad_assignee"
+          ? "Bu admin topilmadi yoki hisobi faol emas."
+          : err?.message || "Server javob bermadi.",
+      );
     } finally {
       setSaqlanmoqda(false);
     }
-  }, [g, masul, masulRoyxat, demo, guruhYangila, yozuvQosh, xabarQosh]);
+  }, [g, masul, masullar, guruhYangila, xabarQosh]);
 
   const tgYubor = useCallback(async () => {
     if (!g) return;
@@ -719,15 +573,6 @@ export default function XatolikBatafsil() {
           "Telegram sozlanmagan",
           "TELEGRAM_BOT_TOKEN va ERROR_ALERT_CHAT_ID berilmagan — kanalga yuborib bo'lmaydi.",
         );
-      } else if (demo && err?.code !== "forbidden") {
-        setOyna(null);
-        setTgVaqt(Date.now());
-        yozuvQosh("telegram", "Telegram'ga yuborildi");
-        xabarQosh(
-          "ok",
-          "Telegram'ga yuborildi",
-          "Demo — backend ulanmagan, haqiqiy xabar ketmadi.",
-        );
       } else {
         xabarQosh(
           "xato",
@@ -738,7 +583,7 @@ export default function XatolikBatafsil() {
     } finally {
       setSaqlanmoqda(false);
     }
-  }, [g, demo, guruhYangila, yozuvQosh, xabarQosh]);
+  }, [g, guruhYangila, xabarQosh]);
 
   /* ── Buferga nusxalash ─────────────────────────────────────────── */
 
@@ -802,14 +647,6 @@ export default function XatolikBatafsil() {
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      {demo && d && (
-        <Izohcha kor="sariq" ikon={<TriangleAlert size={14} aria-hidden />}>
-          <b>Demo ma'lumot.</b> `GET /api/admin/errors/{"{id}"}` hali ulanmagan — ekrandagi barcha
-          sonlar, vaqtlar va stack trace o'ylab topilgan namunadan olingan. Backend tayyor bo'lgach
-          `xatoDemo.ts` dagi `DEMO_YOQILGAN` ni `false` qilish yetarli.
-        </Izohcha>
-      )}
-
       {/* ══ Sahifa sarlavhasi (Figma 394:87) ═══════════════════════ */}
       <div
         className="flex min-h-[83px] min-w-0 flex-wrap items-center justify-between gap-3 rounded-[14px] bg-white px-5 py-[14px]"
@@ -1071,7 +908,6 @@ export default function XatolikBatafsil() {
             xabar={xabarQosh}
             tanlangan={bolaklar}
             setTanlangan={setBolaklar}
-            demo={demo}
             qoldi={qoldi}
             tgBoshla={setTgVaqt}
             guruhYangila={guruhYangila}
@@ -1161,7 +997,7 @@ export default function XatolikBatafsil() {
                     <option value="">
                       {g.assignee ? `O'zgarmasin · ${g.assignee}` : "Men olaman"}
                     </option>
-                    {masulRoyxat.map((m) => (
+                    {masullar.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.label} · {m.role}
                       </option>
@@ -1342,7 +1178,7 @@ export default function XatolikBatafsil() {
         }
       >
         <div className="flex flex-col">
-          {[{ id: "", label: "Biriktirilmasin", role: "" }, ...masulRoyxat].map((m) => (
+          {[{ id: "", label: "Biriktirilmasin", role: "" }, ...masullar].map((m) => (
             <label
               key={m.id || "yoq"}
               className="flex min-h-[40px] cursor-pointer items-center gap-[10px]"
