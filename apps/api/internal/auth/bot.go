@@ -98,7 +98,7 @@ func (h *Handler) telegramSession(w http.ResponseWriter, r *http.Request, telegr
 		u = *user
 	}
 	// No refresh credentials need to be persisted by the bot.
-	access, err := httpx.IssueUserToken(h.cfg.JWTAccessSecret, u.ID.Hex(), h.cfg.JWTAccessTTL)
+	access, err := httpx.IssueUserSessionToken(h.cfg.JWTAccessSecret, u.ID.Hex(), u.SessionVersion, h.cfg.JWTAccessTTL)
 	if err != nil {
 		httpx.Err(w, err)
 		return

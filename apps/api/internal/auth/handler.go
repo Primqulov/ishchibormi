@@ -156,12 +156,12 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 // session is an ordinary user session in every respect — same claims, same
 // secrets, same TTLs, no extra privilege of any kind.
 func (h *Handler) issueSession(w http.ResponseWriter, user *models.User) {
-	access, err := httpx.IssueUserToken(h.cfg.JWTAccessSecret, user.ID.Hex(), h.cfg.JWTAccessTTL)
+	access, err := httpx.IssueUserSessionToken(h.cfg.JWTAccessSecret, user.ID.Hex(), user.SessionVersion, h.cfg.JWTAccessTTL)
 	if err != nil {
 		httpx.Err(w, err)
 		return
 	}
-	refresh, err := httpx.IssueUserToken(h.cfg.JWTRefreshSecret, user.ID.Hex(), h.cfg.JWTRefreshTTL)
+	refresh, err := httpx.IssueUserSessionToken(h.cfg.JWTRefreshSecret, user.ID.Hex(), user.SessionVersion, h.cfg.JWTRefreshTTL)
 	if err != nil {
 		httpx.Err(w, err)
 		return
@@ -357,7 +357,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		httpx.Err(w, httpx.NewError(401, "bad_refresh", "invalid refresh token"))
 		return
 	}
-	uid, err := httpx.ParseUserToken(h.cfg.JWTRefreshSecret, req.RefreshToken)
+	uid, sessionVersion, err := httpx.ParseUserSessionToken(h.cfg.JWTRefreshSecret, req.RefreshToken)
 	if err != nil {
 		httpx.Err(w, httpx.NewError(401, "bad_refresh", "invalid refresh token"))
 		return
@@ -368,16 +368,40 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var u models.User
-	if err := h.users.FindOne(r.Context(), bson.M{"_id": oid}).Decode(&u); err != nil || u.IsBlocked || u.IsDeleted {
+	if err := h.users.FindOne(r.Context(), bson.M{"_id": oid}).Decode(&u); err != nil || u.IsBlocked || u.IsDeleted ||
+		u.SessionVersion != sessionVersion {
 		httpx.Err(w, httpx.NewError(401, "session_revoked", "account session revoked"))
 		return
 	}
-	access, err := httpx.IssueUserToken(h.cfg.JWTAccessSecret, uid, h.cfg.JWTAccessTTL)
+	access, err := httpx.IssueUserSessionToken(h.cfg.JWTAccessSecret, uid, u.SessionVersion, h.cfg.JWTAccessTTL)
 	if err != nil {
 		httpx.Err(w, err)
 		return
 	}
 	httpx.JSON(w, 200, map[string]string{"accessToken": access})
+}
+
+// RevokeSessions — "barcha qurilmalardan chiqish". Sessiya versiyasini oshiradi:
+// shu paytgacha chiqarilgan barcha access/refresh tokenlar (o'g'irlangani ham)
+// darhol yaroqsiz bo'ladi. Chaqirgan qurilma chiqib ketmasligi uchun unga yangi
+// versiyadagi juftlik qaytariladi — javob shakli login bilan bir xil.
+func (h *Handler) RevokeSessions(w http.ResponseWriter, r *http.Request) {
+	oid, err := primitive.ObjectIDFromHex(httpx.UserID(r))
+	if err != nil {
+		httpx.Err(w, httpx.NewError(401, "bad_token", "bad user id"))
+		return
+	}
+	var u models.User
+	err = h.users.FindOneAndUpdate(r.Context(),
+		bson.M{"_id": oid, "isDeleted": bson.M{"$ne": true}},
+		bson.M{"$inc": bson.M{"sessionVersion": 1}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After)).Decode(&u)
+	if err != nil {
+		httpx.Err(w, httpx.NewError(401, "no_account", "account not found"))
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	h.issueSession(w, &u)
 }
 
 func isAllDigits(s string) bool {
@@ -432,6 +456,12 @@ func RequireActiveUser(users *mongo.Collection) func(http.Handler) http.Handler 
 			}
 			if u.IsBlocked || u.IsDeleted {
 				httpx.Err(w, httpx.NewError(403, "account_disabled", "account is blocked or deleted"))
+				return
+			}
+			// Sessiyalar bekor qilingan (versiya oshgan) — eski token yaroqsiz.
+			// 401: klient refresh'ga uriniladi, u ham session_revoked qaytaradi.
+			if u.SessionVersion != httpx.UserSessionVersion(r) {
+				httpx.Err(w, httpx.NewError(401, "session_revoked", "account session revoked"))
 				return
 			}
 			// Avtomatik moderatsiya bloki — mavjud seansni darhol to'xtatadi.

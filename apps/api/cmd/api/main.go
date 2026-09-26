@@ -542,6 +542,10 @@ func main() {
 			r.Use(auth.RequireActiveUser(authH.Users()))
 
 			r.Get("/me", userH.Me)
+			// Barcha qurilmalardagi sessiyalarni bekor qilish (o'g'irlangan
+			// token ham). Chaqirgan qurilma yangi juftlik oladi.
+			r.With(refreshLimiter.Middleware("revoke-sessions"), auth.DenyReviewAccount).
+				Post("/me/sessions/revoke", authH.RevokeSessions)
 			// Profil saqlash endi kontent tekshiruvidan o'tadi, ya'ni pullik
 			// tashqi chaqiruv qiladi — limitsiz qoldirish abuz vektori
 			// bo'lardi. Kalit foydalanuvchi id'si: bir hisob nima

@@ -19,6 +19,9 @@ const (
 	CtxAdminID   ctxKey = "adminId"
 	CtxAdminRole ctxKey = "adminRole"
 	CtxAdminVer  ctxKey = "adminTokenVersion"
+	// CtxUserSessionVer — foydalanuvchi tokenidagi sessiya versiyasi (sv).
+	// auth.RequireActiveUser uni User.SessionVersion bilan solishtiradi.
+	CtxUserSessionVer ctxKey = "userSessionVersion"
 	// CtxReviewActor marks a request made by the sandboxed Google Play review
 	// account. auth.RequireActiveUser sets it (it already has the user
 	// document, so this costs no extra query) and handlers consult it to keep
@@ -59,6 +62,11 @@ func AccessLog(next http.Handler) http.Handler {
 
 type Claims struct {
 	UserID string `json:"uid"`
+	// SessionVersion — token chiqarilgan paytdagi User.SessionVersion. Versiya
+	// oshirilsa (boshqa qurilmalardan chiqish), eski tokenlarning hammasi
+	// kuchini yo'qotadi. omitempty: 0-versiya tokenlar bu funksiyadan oldingi
+	// tokenlar bilan bir xil ko'rinadi, ya'ni eski sessiyalar uzilmaydi.
+	SessionVersion int `json:"sv,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -86,6 +94,7 @@ func UserAuth(secret string) func(http.Handler) http.Handler {
 				return
 			}
 			ctx := context.WithValue(r.Context(), CtxUserID, c.UserID)
+			ctx = context.WithValue(ctx, CtxUserSessionVer, c.SessionVersion)
 			setActor(ctx, c.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -222,6 +231,12 @@ func UserID(r *http.Request) string {
 		return v
 	}
 	return ""
+}
+
+// UserSessionVersion — so'rov tokenidagi sessiya versiyasi (UserAuth qo'yadi).
+func UserSessionVersion(r *http.Request) int {
+	v, _ := r.Context().Value(CtxUserSessionVer).(int)
+	return v
 }
 
 // IsReviewActor reports whether this request comes from the sandboxed Play

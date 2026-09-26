@@ -34,6 +34,10 @@ type User struct {
 	CompletedJobsCount   int     `bson:"completedJobsCount" json:"completedJobsCount"`
 	IsPhoneVerified      bool    `bson:"isPhoneVerified" json:"isPhoneVerified"`
 	IsBlocked            bool    `bson:"isBlocked" json:"isBlocked"`
+	// SessionVersion — foydalanuvchi tokenlarining joriy versiyasi. Oshirilsa
+	// (POST /me/sessions/revoke), shu paytgacha chiqarilgan barcha access va
+	// refresh tokenlar kuchini yo'qotadi. Qarang: httpx.Claims.SessionVersion.
+	SessionVersion int `bson:"sessionVersion,omitempty" json:"-"`
 	// ModerationBannedUntil — avtomatik moderatsiya bloki tugash vaqti.
 	//
 	// IsBlocked dan ATAYLAB alohida: u admin qo'lidagi bayroq. Ikkalasini
