@@ -883,8 +883,10 @@ func (h *Handler) MyElons(w http.ResponseWriter, r *http.Request) {
 		}
 		// Faol = hozir ishchilarga ko'rinadigan (feeddagi kabi): o'chirilmagan,
 		// hali ochiq (recruiting/filled/in_progress) va belgilangan vaqti o'tmagan.
+		// Admin muddati o'tgan ishlarni ko'rsatishni yoqqan bo'lsa ular feedda
+		// turibdi — egasiga ham arxivda emas, faol ro'yxatda ko'rinishi kerak.
 		open := e.Status == "recruiting" || e.Status == "filled" || e.Status == "in_progress"
-		if !e.IsDeleted && open && !isExpired(e, now, elonquery.FeedExpiryGrace) {
+		if !e.IsDeleted && open && (elonquery.ShowExpired() || !isExpired(e, now, elonquery.FeedExpiryGrace)) {
 			active = append(active, e)
 		} else {
 			// Arxiv = vaqti o'tgan, yakunlangan yoki bekor qilingan e'lonlar.

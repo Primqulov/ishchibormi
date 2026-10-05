@@ -9,10 +9,29 @@
 package elonquery
 
 import (
+	"sync/atomic"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+// showExpired — admin panelidagi «Muddati o'tgan ishlar» kaliti
+// (internal/admin/feed_settings.go). Yoqilgan bo'lsa belgilangan sanasi o'tgan
+// e'lonlar ham ommaviy ro'yxatlarda qoladi.
+//
+// Paket darajasidagi holat ataylab: filtrdan beshta mustaqil joy foydalanadi
+// (feed, xarita, sitemap, kategoriya sanoqlari, «Mening e'lonlarim») va
+// ularning hammasi BIR XIL javob berishi shart. Qiymat har chaqiruvchiga
+// alohida uzatilsa, bittasi unutilishi bilan feed va sanoqlar farq qilib
+// qolardi — bu paket aynan shuning oldini olish uchun yaratilgan.
+var showExpired atomic.Bool
+
+// SetShowExpired — kalitni almashtiradi. Bazadagi qiymatni admin paketi
+// o'qiydi va shu yerga uzatadi; bu paket bazani bilmaydi.
+func SetShowExpired(v bool) { showExpired.Store(v) }
+
+// ShowExpired — muddati o'tgan e'lonlar hozir ko'rsatilyaptimi.
+func ShowExpired() bool { return showExpired.Load() }
 
 // FeedExpiryGrace — e'lon belgilangan boshlanish vaqtidan shuncha o'tgach
 // ommaviy feeddan chiqib ketadi (ish odatda shu oraliqda boshlanib bo'ladi).
@@ -24,11 +43,28 @@ const OpenStatus = "recruiting"
 
 // ActiveFilter — hozir ishchilarga ko'rinib turgan e'lonlar filtri:
 // o'chirilmagan, egasi bloklanmagan, hali `recruiting` va vaqti o'tmagan.
+// Admin «Muddati o'tgan ishlar» kalitini yoqqan bo'lsa (ShowExpired) vaqt
+// sharti qo'yilmaydi — natijada `$expr` kaliti umuman bo'lmaydi.
 //
 // includeReviewData=true bo'lsa Google Play demo hisobining e'lonlari ham
 // qo'shiladi (reviewer o'z e'lonini feedda ko'rishi kerak); aks holda ular
 // chiqarib tashlanadi.
 func ActiveFilter(now time.Time, includeReviewData bool) bson.M {
+	f := StrictActiveFilter(now, includeReviewData)
+	if ShowExpired() {
+		delete(f, "$expr")
+	}
+	return f
+}
+
+// StrictActiveFilter — ActiveFilter'ning admin kalitiga QARAMAYDIGAN shakli:
+// vaqti o'tgan e'lon hech qachon o'tmaydi.
+//
+// Telegram kanaliga post chiqarish shundan foydalanadi. Feedda eski e'lonni
+// ko'rsatish — passiv ro'yxat, kanalga yuborish esa obunachilarga boradigan
+// va qaytarib bo'lmaydigan xabar: kalit yoqilgani uchun kechagi ish kanalda
+// "yangi" bo'lib chiqmasligi kerak.
+func StrictActiveFilter(now time.Time, includeReviewData bool) bson.M {
 	f := bson.M{
 		"isDeleted":    bson.M{"$ne": true},
 		"ownerBlocked": bson.M{"$ne": true},

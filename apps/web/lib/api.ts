@@ -1049,6 +1049,18 @@ export interface BroadcastRegions {
 }
 
 // Paged is the shape every admin list endpoint returns.
+/**
+ * «Muddati o'tgan ishlar» kaliti (GET/PUT /api/admin/settings/feed).
+ * `expiredCount` — faqat muddati o'tgani uchun yashirilgan (kalit yoqiq
+ * bo'lsa — faqat shu kalit tufayli ko'rinib turgan) e'lonlar soni.
+ */
+export interface FeedSettings {
+  showExpired: boolean;
+  expiredCount: number;
+  updatedAt?: string;
+  updatedByName?: string;
+}
+
 export interface Paged<T> {
   items: T[];
   page: number;

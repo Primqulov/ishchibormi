@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ishchibormi/backend/internal/models"
+	"github.com/ishchibormi/backend/pkg/elonquery"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -166,5 +167,51 @@ func TestNearbyHandlesCoincidentAntipodalAndEqualDistances(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &result)
 	if len(result.Items) != 3 || result.Items[0].ID != ids[0] || result.Items[1].ID != ids[1] || result.Items[0].DistanceMeters != 0 || math.Abs(result.Items[2].DistanceMeters-math.Pi*6371008.8) > 1 {
 		t.Fatalf("unstable/invalid distances: %+v", result)
+	}
+}
+
+// The admin switch lifts ONLY the expiry condition: a hidden listing stays out
+// of the feed and the map whichever way the switch points.
+func TestShowExpiredSwitchLiftsOnlyTheExpiryCondition(t *testing.T) {
+	db := ownerTestDB(t)
+	h := &Handler{Col: db.Collection("elons"), Users: db.Collection("users")}
+	t.Cleanup(func() { elonquery.SetShowExpired(false) })
+	now := time.Now()
+	past := now.In(uzTZ).AddDate(0, 0, -3).Format("2006-01-02")
+	for _, e := range []models.Elon{
+		{Title: "Yangi", Status: "recruiting", StartDate: now.In(uzTZ).AddDate(0, 0, 1).Format("2006-01-02")},
+		{Title: "Eskirgan", Status: "recruiting", StartDate: past},
+		{Title: "Eskirgan va yashirilgan", Status: "hidden", StartDate: past},
+	} {
+		e.ID, e.WorkersNeeded, e.Lat, e.Lng, e.PublishedAt = primitive.NewObjectID(), 1, 41.3, 69.2, &now
+		if _, err := h.Col.InsertOne(context.Background(), e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	totals := func() (feed, nearby int) {
+		t.Helper()
+		for path, dst := range map[string]*int{"/api/elons": &feed, "/api/elons/nearby?lat=41.3&lng=69.2": &nearby} {
+			w := httptest.NewRecorder()
+			if path == "/api/elons" {
+				h.Feed(w, httptest.NewRequest("GET", path, nil))
+			} else {
+				h.Nearby(w, httptest.NewRequest("GET", path, nil))
+			}
+			var page struct {
+				Total int `json:"total"`
+			}
+			if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &page) != nil {
+				t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+			}
+			*dst = page.Total
+		}
+		return
+	}
+	if feed, nearby := totals(); feed != 1 || nearby != 1 {
+		t.Fatalf("switch off: feed=%d nearby=%d, want 1 and 1", feed, nearby)
+	}
+	elonquery.SetShowExpired(true)
+	if feed, nearby := totals(); feed != 2 || nearby != 2 {
+		t.Fatalf("switch on: feed=%d nearby=%d, want 2 and 2", feed, nearby)
 	}
 }

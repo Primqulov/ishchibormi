@@ -85,13 +85,18 @@ func nearbyFilter(now time.Time, includeReview bool) bson.M {
 	f := elonquery.ActiveFilter(now, includeReview)
 	f["lat"] = bson.M{"$gte": -90, "$lte": 90}
 	f["lng"] = bson.M{"$gte": -180, "$lte": 180}
-	f["$expr"] = bson.M{"$and": bson.A{
-		f["$expr"],
+	conds := bson.A{
 		bson.M{"$isNumber": "$lat"}, bson.M{"$isNumber": "$lng"},
 		// 0,0 is the legacy application's sentinel for a missing map pin.
 		bson.M{"$or": bson.A{bson.M{"$ne": bson.A{"$lat", 0}}, bson.M{"$ne": bson.A{"$lng", 0}}}},
 		bson.M{"$gt": bson.A{bson.M{"$ifNull": bson.A{"$workersNeeded", 0}}, bson.M{"$ifNull": bson.A{"$acceptedCount", 0}}}},
-	}}
+	}
+	// The expiry condition is absent while the admin shows expired listings; a
+	// nil element inside $and would evaluate to false and empty the map.
+	if expiry, ok := f["$expr"]; ok {
+		conds = append(bson.A{expiry}, conds...)
+	}
+	f["$expr"] = bson.M{"$and": conds}
 	return f
 }
 

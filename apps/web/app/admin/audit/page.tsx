@@ -289,6 +289,13 @@ const AMAL: Record<string, AmalMeta> = {
   // ── E'lonlar ──
   elon_delete: { yorliq: "E'lonni o'chirdi", guruh: "elon", maqsad: "elon" },
   elon_status: { yorliq: "E'lon holatini o'zgartirdi", guruh: "elon", maqsad: "elon" },
+  // «Muddati o'tgan ishlar» kaliti (E'lonlar sahifasi). Nishon bitta —
+  // butun feed, shuning uchun maqsad ustuni bo'sh; yo'nalish izohda turadi.
+  feed_show_expired: {
+    yorliq: "Muddati o'tgan ishlar ko'rinishini o'zgartirdi",
+    guruh: "elon",
+    maqsad: "yoq",
+  },
   // ── Xatoliklar (3.12) ──
   // Ikkita alohida kod bir sababga ko'ra: `error_ignore` — nosozlikni
   // ro'yxatdan va ogohlantirishlardan OLIB TASHLASH amali. Uni oddiy holat

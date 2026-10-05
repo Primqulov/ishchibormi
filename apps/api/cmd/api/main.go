@@ -244,6 +244,13 @@ func main() {
 	// Gemini kalitidan MUSTAQIL: kalit yo'q bo'lsa yangi blok qo'yilmaydi,
 	// lekin allaqachon qo'yilganlarini ochish kerak bo'lib qolaveradi.
 	adminH.Strikes = modStrikes
+	// «Muddati o'tgan ishlar» kaliti (internal/admin/feed_settings.go). Server
+	// so'rov qabul qilishidan OLDIN o'qiladi — aks holda restartdan keyingi
+	// birinchi daqiqada feed admin tanlagan rejimda bo'lmasdi.
+	if err := adminH.LoadFeedSettings(ctx); err != nil {
+		log.Warn("feed settings load failed — expired listings stay hidden", "err", err)
+	}
+	go adminH.RunFeedSettingsSync(ctx)
 	// Background scheduler: delivers due scheduled broadcasts (checks every
 	// minute). Stops when ctx is cancelled on shutdown.
 	go adminH.RunScheduler(ctx)
@@ -729,6 +736,10 @@ func main() {
 				r.Post("/users/{id}/notify", adminH.NotifyUser)
 				r.Delete("/users/{id}/avatar", adminH.DeleteUserAvatar)
 				r.Get("/elons", adminH.ListElons)
+				// «Muddati o'tgan ishlar» kalitining holati — e'lonlar
+				// ro'yxatini ko'radigan har bir rol uchun. Almashtirish
+				// pastda, superadmin guruhida.
+				r.Get("/settings/feed", adminH.GetFeedSettings)
 				// Bitta e'lonning batafsil ko'rinishi (Figma 3.5.1) —
 				// `GET /users/{id}` bilan bir xil daraja: superadmin +
 				// moderator. Mexanizmi internal/admin/elon_detail.go.
@@ -769,6 +780,10 @@ func main() {
 				r.Use(httpx.RequireRole())
 				// Avtomatik moderatsiya blokini ochish — faqat superadmin.
 				r.Delete("/users/{id}/moderation-ban", adminH.LiftModerationBan)
+				// Butun platformadagi e'lonlar ko'rinishini o'zgartiradi,
+				// shuning uchun turkumlar bilan bir xil budjetda.
+				r.With(catWriteLimiter.MiddlewareKey("admin-feed-settings", httpx.AdminID)).
+					Put("/settings/feed", adminH.SetFeedSettings)
 				// Turkum yozuvlari — o'z budjeti bilan (yuqoridagi
 				// catWriteLimiter izohiga qarang). O'qish (`GET
 				// /categories`) bu guruhdan tashqarida: uni jadval har

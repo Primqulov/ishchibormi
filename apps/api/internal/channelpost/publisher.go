@@ -284,7 +284,7 @@ func (p *Publisher) deliverNext(parent context.Context) (bool, error) {
 	if !strings.EqualFold(claimed.BotUsername, p.botUsername) {
 		return true, p.finish(ctx, claimed, "failed", "bot_username_mismatch", 0)
 	}
-	filter := elonquery.ActiveFilter(now, false)
+	filter := elonquery.StrictActiveFilter(now, false)
 	filter["_id"] = claimed.ElonID
 	var live models.Elon
 	err = p.elons.FindOne(ctx, filter).Decode(&live)

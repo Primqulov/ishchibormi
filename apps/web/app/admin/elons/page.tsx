@@ -6,6 +6,7 @@ import { api, Elon, Category, Paged, downloadAdminCsv, getAdminRole, APIError } 
 import { DeleteModeModal, DeleteMode } from "@/components/admin/DeleteModeModal";
 import { Pagination } from "@/components/Pagination";
 import { MatnFiltr, Tanlov } from "@/components/admin/Filtr";
+import { MuddatKaliti } from "@/components/admin/MuddatKaliti";
 import { ELON_HOLAT, ELON_HOLATLARI, ElonNishoni, elonHolatKor } from "@/components/admin/ElonHolat";
 import {
   HOSHIYA,
@@ -245,6 +246,8 @@ export default function AdminElons() {
           CSV yuklab olish
         </button>
       </div>
+
+      <MuddatKaliti ozgartiraOladi={isSuper} />
 
       {/* ── Filtr + jadval kartasi ───────────────────────────────────── */}
       <div className="overflow-hidden rounded-[14px] bg-white" style={karta}>
